@@ -5,7 +5,13 @@ import {
   OperationLog,
 } from '../types';
 import { StorageManager } from '../storage/storage-manager';
-import { AdapterRegistry } from '../adapters/registry';
+
+/** Performs one action on one conversation inside its platform's page. */
+export type ActionDispatcher = (
+  chat: ChatMetadata,
+  action: 'archive' | 'delete',
+  dryRun: boolean
+) => Promise<ActionResult>;
 
 export interface BatchProgressCallback {
   (progress: {
@@ -42,7 +48,8 @@ export class SafeBatchExecutor {
     action: 'archive' | 'delete',
     dryRun: boolean,
     settings: UserSettings,
-    onProgress?: BatchProgressCallback
+    onProgress?: BatchProgressCallback,
+    dispatcher?: ActionDispatcher
   ): Promise<{ results: ActionResult[]; cancelled: boolean; stoppedOnError?: string }> {
     if (this.isRunning) {
       throw new Error('Another batch operation is already in progress.');
@@ -101,8 +108,34 @@ export class SafeBatchExecutor {
 
         let actionResult: ActionResult;
 
-        if (dryRun) {
-          // Dry-run mode: Never mutates DOM or calls destructive methods
+        if (action === 'archive' && !chat.supportsArchive) {
+          actionResult = {
+            success: false,
+            action: dryRun ? 'dry_run' : 'archive',
+            chatId: chat.id,
+            platform: chat.platform,
+            timestamp: Date.now(),
+            verified: false,
+            error: `Archive not supported for ${chat.platform}.`,
+          };
+        } else if (dispatcher) {
+          // Runs in the chat tab's content script, which owns the page DOM.
+          // Dry runs there check the conversation and its menu exist without acting.
+          try {
+            actionResult = await dispatcher(chat, action, dryRun);
+          } catch (err: any) {
+            actionResult = {
+              success: false,
+              action: dryRun ? 'dry_run' : action,
+              chatId: chat.id,
+              platform: chat.platform,
+              timestamp: Date.now(),
+              verified: false,
+              error: err?.message || 'Failed to reach the chat tab.',
+            };
+          }
+        } else if (dryRun) {
+          // No page connection: offline simulation that never touches a page
           actionResult = {
             success: true,
             action: 'dry_run',
@@ -112,36 +145,15 @@ export class SafeBatchExecutor {
             verified: true,
           };
         } else {
-          // Live execution: Find registered adapter for platform
-          const adapter = AdapterRegistry.getAdapter(chat.platform);
-          if (!adapter) {
-            actionResult = {
-              success: false,
-              action,
-              chatId: chat.id,
-              platform: chat.platform,
-              timestamp: Date.now(),
-              verified: false,
-              error: `No adapter available for platform "${chat.platform}".`,
-            };
-          } else {
-            // Execute via adapter with strict identity check
-            if (action === 'delete') {
-              actionResult = await adapter.deleteChat(chat, false);
-            } else if (action === 'archive' && adapter.archiveChat) {
-              actionResult = await adapter.archiveChat(chat, false);
-            } else {
-              actionResult = {
-                success: false,
-                action: 'archive',
-                chatId: chat.id,
-                platform: chat.platform,
-                timestamp: Date.now(),
-                verified: false,
-                error: `Archive not supported for ${chat.platform}.`,
-              };
-            }
-          }
+          actionResult = {
+            success: false,
+            action,
+            chatId: chat.id,
+            platform: chat.platform,
+            timestamp: Date.now(),
+            verified: false,
+            error: 'Live actions must run through the extension background worker.',
+          };
         }
 
         results.push(actionResult);

@@ -1,14 +1,8 @@
 import React from 'react';
 import { ChatMetadata, ClassificationCategory } from '../../types';
 import { Badge } from '../Common/Badge';
-import {
-  ExternalLink,
-  Trash2,
-  CheckCircle,
-  HelpCircle,
-  Lock,
-  Unlock,
-} from 'lucide-react';
+import { PlatformMark, PLATFORM_META } from '../Common/PlatformMark';
+import { ExternalLink, Trash2, Lock, Unlock, Inbox } from 'lucide-react';
 
 interface ConversationTableProps {
   chats: ChatMetadata[];
@@ -21,6 +15,12 @@ interface ConversationTableProps {
   onSingleDelete: (chat: ChatMetadata) => void;
 }
 
+const CATEGORY_BADGE: Record<ClassificationCategory, { label: string; variant: 'rose' | 'amber' | 'green' }> = {
+  cleanup: { label: 'Cleanup', variant: 'rose' },
+  review: { label: 'Review', variant: 'amber' },
+  keep: { label: 'Keep', variant: 'green' },
+};
+
 export const ConversationTable: React.FC<ConversationTableProps> = ({
   chats,
   selectedIds,
@@ -31,202 +31,167 @@ export const ConversationTable: React.FC<ConversationTableProps> = ({
   onChangeCategory,
   onSingleDelete,
 }) => {
-  // Selectable chats are those that are NOT protected
   const selectableChats = chats.filter((c) => !c.isProtected && c.status !== 'deleted');
   const allSelectableChosen =
     selectableChats.length > 0 && selectableChats.every((c) => selectedIds.includes(c.id));
 
-  const getCategoryBadge = (cat: ClassificationCategory, confidence: number) => {
-    switch (cat) {
-      case 'cleanup':
-        return (
-          <Badge variant="rose" size="sm">
-            <Trash2 className="w-3 h-3 text-rose-400" />
-            Cleanup ({Math.round(confidence * 100)}%)
-          </Badge>
-        );
-      case 'review':
-        return (
-          <Badge variant="amber" size="sm">
-            <HelpCircle className="w-3 h-3 text-amber-400" />
-            Review ({Math.round(confidence * 100)}%)
-          </Badge>
-        );
-      case 'keep':
-      default:
-        return (
-          <Badge variant="green" size="sm">
-            <CheckCircle className="w-3 h-3 text-emerald-400" />
-            Keep ({Math.round(confidence * 100)}%)
-          </Badge>
-        );
-    }
-  };
-
-  const getPlatformBadge = (platform: string) => {
-    switch (platform) {
-      case 'chatgpt':
-        return (
-          <Badge variant="green" size="sm">
-            ChatGPT
-          </Badge>
-        );
-      case 'gemini':
-        return (
-          <Badge variant="blue" size="sm">
-            Gemini
-          </Badge>
-        );
-      case 'claude':
-        return (
-          <Badge variant="purple" size="sm">
-            Claude
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="slate" size="sm">
-            {platform}
-          </Badge>
-        );
-    }
-  };
-
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40 backdrop-blur-md">
-      <table className="w-full text-left text-xs">
-        <thead className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-medium">
-          <tr>
-            <th className="p-3 w-10 text-center">
-              <input
-                type="checkbox"
-                checked={allSelectableChosen}
-                onChange={() => (allSelectableChosen ? onDeselectAll() : onSelectAll())}
-                className="rounded border-slate-700 bg-slate-800 text-brand-500 focus:ring-brand-400 cursor-pointer"
-                title="Select all non-protected chats"
-              />
-            </th>
-            <th className="p-3">Title & Conversation Link</th>
-            <th className="p-3 w-28">Platform</th>
-            <th className="p-3 w-36">Classification</th>
-            <th className="p-3">Primary Reason</th>
-            <th className="p-3 w-24 text-center">Protection</th>
-            <th className="p-3 w-28 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-850">
-          {chats.length === 0 ? (
+    <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-card">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] text-left text-[15px]">
+          <thead className="border-b border-border bg-surface-2 text-sm text-fg-muted">
             <tr>
-              <td colSpan={7} className="py-12 text-center text-slate-500 text-xs">
-                No conversations match the selected filter. Run a scan or adjust filters.
-              </td>
+              <th scope="col" className="w-12 py-3 pl-5 pr-2">
+                <input
+                  type="checkbox"
+                  checked={allSelectableChosen}
+                  onChange={() => (allSelectableChosen ? onDeselectAll() : onSelectAll())}
+                  aria-label="Select all unprotected conversations"
+                />
+              </th>
+              <th scope="col" className="py-3 px-3 font-medium">Conversation</th>
+              <th scope="col" className="py-3 px-3 font-medium w-32">Platform</th>
+              <th scope="col" className="py-3 px-3 font-medium w-40">Classification</th>
+              <th scope="col" className="py-3 px-3 font-medium">Reason</th>
+              <th scope="col" className="py-3 pl-3 pr-5 font-medium w-36 text-right">Actions</th>
             </tr>
-          ) : (
-            chats.map((chat) => {
-              const isSelected = selectedIds.includes(chat.id);
-              const isDeleted = chat.status === 'deleted';
+          </thead>
+          <tbody className="divide-y divide-border">
+            {chats.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-16 text-center">
+                  <Inbox className="mx-auto size-8 text-fg-subtle" />
+                  <p className="mt-3 text-base font-medium">No conversations match</p>
+                  <p className="mt-1 text-sm text-fg-muted">Run a scan or loosen the filters above.</p>
+                </td>
+              </tr>
+            ) : (
+              chats.map((chat) => {
+                const isSelected = selectedIds.includes(chat.id);
+                const isDeleted = chat.status === 'deleted';
+                const badge = CATEGORY_BADGE[chat.category] ?? CATEGORY_BADGE.keep;
 
-              return (
-                <tr
-                  key={chat.id}
-                  className={`hover:bg-slate-850/60 transition-colors ${
-                    isSelected ? 'bg-slate-800/40' : ''
-                  } ${chat.isProtected ? 'bg-brand-950/10' : ''} ${
-                    isDeleted ? 'opacity-40 line-through' : ''
-                  }`}
-                >
-                  {/* Selection Checkbox */}
-                  <td className="p-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      disabled={chat.isProtected || isDeleted}
-                      onChange={() => onToggleSelect(chat.id)}
-                      className="rounded border-slate-700 bg-slate-800 text-brand-500 focus:ring-brand-400 disabled:opacity-30 cursor-pointer"
-                    />
-                  </td>
+                return (
+                  <tr
+                    key={chat.id}
+                    className={`transition-colors ${isSelected ? 'bg-accent-soft/60' : 'hover:bg-surface-2/70'} ${
+                      isDeleted ? 'opacity-50' : ''
+                    }`}
+                  >
+                    <td className="py-3.5 pl-5 pr-2 align-top">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={isSelected}
+                        disabled={chat.isProtected || isDeleted}
+                        onChange={() => onToggleSelect(chat.id)}
+                        aria-label={`Select ${chat.title}`}
+                      />
+                    </td>
 
-                  {/* Title & Link */}
-                  <td className="p-3">
-                    <div className="flex items-center gap-1.5">
+                    <td className="py-3.5 px-3 align-top max-w-0 w-[32%]">
                       <a
                         href={chat.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="font-medium text-slate-200 hover:text-brand-400 hover:underline max-w-md truncate block"
+                        className={`group inline-flex max-w-full items-center gap-1.5 font-medium hover:text-accent-text ${
+                          isDeleted ? 'line-through' : ''
+                        }`}
+                        title={chat.title}
                       >
-                        {chat.title}
+                        <span className="truncate">{chat.title}</span>
+                        <ExternalLink className="size-3.5 shrink-0 text-fg-subtle opacity-0 group-hover:opacity-100" />
                       </a>
-                      <ExternalLink className="w-3 h-3 text-slate-500 shrink-0" />
-                    </div>
-                    {chat.lastActivityTimestamp && (
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        Active {new Date(chat.lastActivityTimestamp).toLocaleDateString()}
+                      <div className="mt-0.5 flex items-center gap-2 text-sm text-fg-subtle">
+                        {chat.isProtected && (
+                          <span className="inline-flex items-center gap-1 text-accent-text">
+                            <Lock className="size-3.5" />
+                            Protected
+                          </span>
+                        )}
+                        {isDeleted && <span>Deleted</span>}
+                        {chat.lastActivityTimestamp && (
+                          <span>Active {new Date(chat.lastActivityTimestamp).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="py-3.5 px-3 align-top">
+                      <span className="inline-flex items-center gap-2 text-sm">
+                        <PlatformMark platform={chat.platform} size="sm" />
+                        {PLATFORM_META[chat.platform]?.shortName ?? chat.platform}
                       </span>
-                    )}
-                  </td>
+                    </td>
 
-                  {/* Platform */}
-                  <td className="p-3">{getPlatformBadge(chat.platform)}</td>
+                    <td className="py-3.5 px-3 align-top">
+                      <Badge variant={badge.variant} size="sm">
+                        {badge.label}
+                        <span className="opacity-70 tabular-nums">{Math.round(chat.confidence * 100)}%</span>
+                      </Badge>
+                    </td>
 
-                  {/* Classification */}
-                  <td className="p-3">
-                    {getCategoryBadge(chat.category, chat.confidence)}
-                  </td>
+                    <td className="py-3.5 px-3 align-top max-w-0 text-sm text-fg-muted">
+                      <p className="line-clamp-2" title={chat.reasons.join('\n')}>
+                        {chat.reasons[0] || 'No low-value signals found.'}
+                      </p>
+                    </td>
 
-                  {/* Reason */}
-                  <td className="p-3 text-slate-400 text-[11px] max-w-xs truncate" title={chat.reasons.join('\n')}>
-                    {chat.reasons[0] || 'No low-value signals detected.'}
-                  </td>
-
-                  {/* Protection Toggle */}
-                  <td className="p-3 text-center">
-                    <button
-                      onClick={() => onToggleProtection(chat.id)}
-                      title={chat.isProtected ? 'Locked: Immune from deletion' : 'Click to lock and protect'}
-                      className={`p-1.5 rounded-lg transition-colors ${
-                        chat.isProtected
-                          ? 'text-brand-400 bg-brand-500/10 hover:bg-brand-500/20'
-                          : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      {chat.isProtected ? (
-                        <Lock className="w-3.5 h-3.5" />
-                      ) : (
-                        <Unlock className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </td>
-
-                  {/* Quick Actions */}
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {chat.category !== 'keep' && (
-                        <button
-                          onClick={() => onChangeCategory(chat.id, 'keep')}
-                          title="Override as Keep"
-                          className="px-2 py-1 text-[10px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium"
+                    <td className="py-3.5 pl-3 pr-5 align-top">
+                      <div className="flex items-center justify-end gap-1">
+                        {chat.category !== 'keep' && !isDeleted && (
+                          <button
+                            type="button"
+                            onClick={() => onChangeCategory(chat.id, 'keep')}
+                            className="h-8 rounded-md px-2.5 text-sm font-medium text-fg-muted hover:bg-surface-3 hover:text-fg"
+                          >
+                            Keep
+                          </button>
+                        )}
+                        <IconAction
+                          label={chat.isProtected ? 'Remove protection' : 'Protect conversation'}
+                          onClick={() => onToggleProtection(chat.id)}
+                          active={chat.isProtected}
                         >
-                          Keep
-                        </button>
-                      )}
-                      {!chat.isProtected && !isDeleted && (
-                        <button
-                          onClick={() => onSingleDelete(chat)}
-                          title="Delete single chat"
-                          className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+                          {chat.isProtected ? <Lock /> : <Unlock />}
+                        </IconAction>
+                        {!chat.isProtected && !isDeleted && (
+                          <IconAction label="Delete conversation" onClick={() => onSingleDelete(chat)} danger>
+                            <Trash2 />
+                          </IconAction>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
+
+const IconAction: React.FC<{
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  danger?: boolean;
+  children: React.ReactNode;
+}> = ({ label, onClick, active, danger, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    title={label}
+    className={`flex size-8 items-center justify-center rounded-md transition-colors [&_svg]:size-4 ${
+      active
+        ? 'bg-accent-soft text-accent-text'
+        : danger
+        ? 'text-fg-subtle hover:bg-danger-soft hover:text-danger-text'
+        : 'text-fg-subtle hover:bg-surface-3 hover:text-fg'
+    }`}
+  >
+    {children}
+  </button>
+);

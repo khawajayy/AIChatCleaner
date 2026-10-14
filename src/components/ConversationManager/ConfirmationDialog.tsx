@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Modal } from '../Common/Modal';
 import { Button } from '../Common/Button';
+import { Switch } from '../Common/Switch';
+import { PlatformMark, PLATFORM_META } from '../Common/PlatformMark';
 import { ChatMetadata, ActionResult } from '../../types';
 import { AlertTriangle, ShieldCheck } from 'lucide-react';
 
@@ -38,11 +40,14 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 }) => {
   const [confirmedCheckbox, setConfirmedCheckbox] = useState(false);
 
-  // Derive platforms involved
-  const platforms = Array.from(new Set(chats.map((c) => c.platform))).join(', ');
+  const platforms = Array.from(new Set(chats.map((c) => c.platform)))
+    .map((p) => PLATFORM_META[p]?.shortName ?? p)
+    .join(', ');
+  const noun = `${chats.length} conversation${chats.length === 1 ? '' : 's'}`;
+  const pct = progress && progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
 
   const handleClose = () => {
-    if (isProcessing) return; // Do not close while executing
+    if (isProcessing) return;
     setConfirmedCheckbox(false);
     onClose();
   };
@@ -51,146 +56,101 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={
-        isDryRun
-          ? 'Preview Action (Dry-Run Mode)'
-          : action === 'delete'
-          ? 'Confirm Permanent Deletion'
-          : 'Confirm Archive'
-      }
+      title={isDryRun ? 'Run a dry run' : action === 'delete' ? `Delete ${noun}?` : `Archive ${noun}?`}
       description={
         isDryRun
-          ? 'Simulate and verify the target operation safely without modifying your account.'
-          : 'Destructive operation: Review the list of targeted conversations carefully.'
+          ? 'Checks each conversation can be found and acted on. Nothing is changed.'
+          : 'Review the list below before continuing.'
       }
       maxWidth="xl"
     >
-      <div className="space-y-4 text-xs">
-        {/* Safety Banner */}
+      <div className="space-y-5 text-[15px]">
         {isDryRun ? (
-          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 flex items-start gap-2.5">
-            <ShieldCheck className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
-            <div>
-              <span className="font-semibold text-emerald-200">Dry-Run Protection Enabled:</span>{' '}
-              ChatSweep will verify DOM identifiers and emulate the process. Zero conversations will be modified or deleted.
-            </div>
+          <div className="flex items-start gap-3 rounded-xl bg-accent-soft p-4 text-accent-text">
+            <ShieldCheck className="mt-0.5 size-5 shrink-0" />
+            <p>Simulation only. Your conversations stay exactly as they are.</p>
           </div>
         ) : (
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 mt-0.5 text-rose-400 shrink-0" />
-            <div>
-              <span className="font-semibold text-rose-200">Irreversible Action:</span>{' '}
-              Deleting conversations permanently removes them from the platform. The platform cannot undo this deletion.
-            </div>
+          <div className="flex items-start gap-3 rounded-xl bg-danger-soft p-4 text-danger-text">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+            <p>
+              {action === 'delete'
+                ? 'Deleted conversations are removed from the platform and cannot be recovered.'
+                : 'Archived conversations are hidden from the platform sidebar.'}
+            </p>
           </div>
         )}
 
-        {/* Summary Info */}
-        <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-          <div>
-            <span className="text-slate-400">Total Selected:</span>
-            <p className="font-mono font-bold text-sm text-white mt-0.5">{chats.length} chats</p>
-          </div>
-          <div>
-            <span className="text-slate-400">Platform(s):</span>
-            <p className="font-mono font-semibold text-xs text-brand-400 mt-0.5 uppercase">{platforms}</p>
-          </div>
-        </div>
-
-        {/* Conversation Titles List */}
         <div>
-          <label className="text-slate-400 font-medium block mb-1.5">
-            Selected Conversations ({chats.length}):
-          </label>
-          <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/80 p-2 divide-y divide-slate-850">
-            {chats.map((chat) => (
-              <div key={chat.id} className="py-1.5 px-2 flex items-center justify-between text-[11px]">
-                <span className="text-slate-200 font-medium truncate max-w-sm">{chat.title}</span>
-                <span className="text-slate-500 uppercase font-mono text-[10px]">{chat.platform}</span>
-              </div>
-            ))}
+          <div className="mb-2 flex items-baseline justify-between">
+            <p className="font-medium">{noun}</p>
+            <p className="text-sm text-fg-muted">{platforms}</p>
           </div>
+          <ul className="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+            {chats.map((chat) => (
+              <li key={chat.id} className="flex items-center gap-3 px-3 py-2.5">
+                <PlatformMark platform={chat.platform} size="sm" />
+                <span className="truncate">{chat.title}</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        {/* Dry-Run Checkbox Toggle inside Dialog */}
-        <div className="flex items-center gap-2 pt-1">
-          <input
-            id="toggle-dry-run-modal"
-            type="checkbox"
-            checked={isDryRun}
-            onChange={(e) => onToggleDryRun(e.target.checked)}
-            disabled={isProcessing}
-            className="rounded border-slate-700 bg-slate-800 text-brand-500 focus:ring-brand-400"
-          />
-          <label htmlFor="toggle-dry-run-modal" className="text-slate-300 cursor-pointer">
-            Execute as Dry-Run simulation only (Recommended first)
-          </label>
+        <div className="flex items-center justify-between gap-4 rounded-lg bg-surface-2 px-4 py-3">
+          <div>
+            <p className="font-medium">Dry run only</p>
+            <p className="text-sm text-fg-muted">Recommended before any real deletion.</p>
+          </div>
+          <Switch checked={isDryRun} onChange={onToggleDryRun} disabled={isProcessing} label="Dry run only" />
         </div>
 
-        {/* For Live Deletions: Extra acknowledgment checkbox */}
         {!isDryRun && action === 'delete' && (
-          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-rose-950/20 border border-rose-900/40">
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-danger/40 px-4 py-3">
             <input
-              id="confirm-destructive"
               type="checkbox"
+              className="mt-0.5"
               checked={confirmedCheckbox}
               onChange={(e) => setConfirmedCheckbox(e.target.checked)}
               disabled={isProcessing}
-              className="rounded border-rose-700 bg-rose-950 text-rose-500 focus:ring-rose-400"
             />
-            <label htmlFor="confirm-destructive" className="text-rose-200 cursor-pointer font-medium">
-              I understand that {chats.length} conversation(s) will be permanently deleted.
-            </label>
-          </div>
+            <span>I understand {noun} will be permanently deleted.</span>
+          </label>
         )}
 
-        {/* Progress Bar during active execution */}
         {isProcessing && progress && (
-          <div className="mt-3 p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-300">
-                Processing {progress.current} of {progress.total}...
+          <div className="space-y-2 rounded-lg border border-border p-4" aria-live="polite">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">
+                Processing {progress.current} of {progress.total}
               </span>
-              <span className="text-brand-400">
-                {Math.round((progress.current / progress.total) * 100)}%
-              </span>
+              <span className="text-fg-muted tabular-nums">{pct}%</span>
             </div>
-            <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-brand-500 h-1.5 rounded-full transition-all duration-300"
-                style={{ width: `${(progress.current / progress.total) * 100}%` }}
-              />
+            <div className="h-2 w-full overflow-hidden rounded-full bg-surface-3">
+              <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
             </div>
             {progress.currentChatTitle && (
-              <p className="text-[11px] text-slate-400 truncate">
-                Current: <span className="text-slate-200">{progress.currentChatTitle}</span>
-              </p>
+              <p className="truncate text-sm text-fg-muted">{progress.currentChatTitle}</p>
             )}
           </div>
         )}
 
-        {/* Footer Actions */}
-        <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+        <div className="flex items-center justify-end gap-3 border-t border-border pt-5">
           {isProcessing ? (
-            <Button variant="danger" size="sm" onClick={onCancelBatch}>
-              Cancel In-Flight Batch
+            <Button variant="danger" size="md" onClick={onCancelBatch}>
+              Stop batch
             </Button>
           ) : (
             <>
-              <Button variant="ghost" size="sm" onClick={handleClose}>
+              <Button variant="ghost" size="md" onClick={handleClose}>
                 Cancel
               </Button>
               <Button
                 variant={isDryRun ? 'primary' : 'danger'}
-                size="sm"
+                size="md"
                 onClick={onConfirm}
                 disabled={!isDryRun && action === 'delete' && !confirmedCheckbox}
               >
-                {isDryRun
-                  ? 'Run Dry-Run Preview'
-                  : action === 'delete'
-                  ? `Permanently Delete ${chats.length} Chat(s)`
-                  : `Archive ${chats.length} Chat(s)`}
+                {isDryRun ? 'Start dry run' : action === 'delete' ? `Delete ${noun}` : `Archive ${noun}`}
               </Button>
             </>
           )}

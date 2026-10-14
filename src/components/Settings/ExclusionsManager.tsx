@@ -1,19 +1,16 @@
 import React, { useState } from 'react';
-import { Card } from '../Common/Card';
+import { Card, CardHeader } from '../Common/Card';
 import { Button } from '../Common/Button';
-import { Badge } from '../Common/Badge';
+import { inputClass } from '../Common/formStyles';
 import { UserSettings } from '../../types';
-import { Shield, Plus, X, AlertCircle } from 'lucide-react';
+import { Tags, Regex, Plus, X, AlertCircle } from 'lucide-react';
 
 interface ExclusionsManagerProps {
   settings: UserSettings;
   onUpdate: (partial: Partial<UserSettings>) => void;
 }
 
-export const ExclusionsManager: React.FC<ExclusionsManagerProps> = ({
-  settings,
-  onUpdate,
-}) => {
+export const ExclusionsManager: React.FC<ExclusionsManagerProps> = ({ settings, onUpdate }) => {
   const [newKeyword, setNewKeyword] = useState('');
   const [newPattern, setNewPattern] = useState('');
   const [patternError, setPatternError] = useState<string | null>(null);
@@ -22,17 +19,12 @@ export const ExclusionsManager: React.FC<ExclusionsManagerProps> = ({
     e.preventDefault();
     const trimmed = newKeyword.trim().toLowerCase();
     if (!trimmed || settings.protectedKeywords.includes(trimmed)) return;
-
-    onUpdate({
-      protectedKeywords: [...settings.protectedKeywords, trimmed],
-    });
+    onUpdate({ protectedKeywords: [...settings.protectedKeywords, trimmed] });
     setNewKeyword('');
   };
 
   const handleRemoveKeyword = (kw: string) => {
-    onUpdate({
-      protectedKeywords: settings.protectedKeywords.filter((k) => k !== kw),
-    });
+    onUpdate({ protectedKeywords: settings.protectedKeywords.filter((k) => k !== kw) });
   };
 
   const handleAddPattern = (e: React.FormEvent) => {
@@ -40,120 +32,107 @@ export const ExclusionsManager: React.FC<ExclusionsManagerProps> = ({
     setPatternError(null);
     const trimmed = newPattern.trim();
     if (!trimmed) return;
-
     try {
-      new RegExp(trimmed); // Validate syntax
+      new RegExp(trimmed);
     } catch {
-      setPatternError('Invalid regular expression syntax.');
+      setPatternError("That isn't a valid regular expression.");
       return;
     }
-
     if (settings.protectedRegexPatterns.includes(trimmed)) return;
-
-    onUpdate({
-      protectedRegexPatterns: [...settings.protectedRegexPatterns, trimmed],
-    });
+    onUpdate({ protectedRegexPatterns: [...settings.protectedRegexPatterns, trimmed] });
     setNewPattern('');
   };
 
   const handleRemovePattern = (pattern: string) => {
-    onUpdate({
-      protectedRegexPatterns: settings.protectedRegexPatterns.filter((p) => p !== pattern),
-    });
+    onUpdate({ protectedRegexPatterns: settings.protectedRegexPatterns.filter((p) => p !== pattern) });
   };
 
   return (
     <div className="space-y-6">
-      {/* Protected Keywords */}
       <Card>
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
-          <Shield className="w-4 h-4 text-emerald-400" />
-          <h5 className="font-semibold text-sm text-white">Protected Keyword Exclusions</h5>
-        </div>
-
-        <p className="text-xs text-slate-400 mt-2">
-          Any conversation whose title contains one of these keywords is strictly protected and will never be suggested for deletion.
-        </p>
-
-        {/* Input form */}
-        <form onSubmit={handleAddKeyword} className="mt-3 flex items-center gap-2">
+        <CardHeader
+          icon={<Tags />}
+          title="Protected keywords"
+          description="A conversation whose title contains any of these is never suggested for cleanup."
+        />
+        <form onSubmit={handleAddKeyword} className="flex gap-2">
           <input
             type="text"
             value={newKeyword}
             onChange={(e) => setNewKeyword(e.target.value)}
-            placeholder="Add keyword (e.g. taxes, medical, project)..."
-            className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-slate-950/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500"
+            placeholder="e.g. taxes, medical, project"
+            aria-label="New protected keyword"
+            className={inputClass}
           />
-          <Button variant="secondary" size="sm" type="submit" icon={<Plus className="w-3.5 h-3.5" />}>
-            Add Keyword
+          <Button variant="secondary" size="md" type="submit" icon={<Plus />}>
+            Add
           </Button>
         </form>
-
-        {/* Badges list */}
-        <div className="mt-4 flex flex-wrap gap-2">
-          {settings.protectedKeywords.map((kw) => (
-            <Badge key={kw} variant="green" size="md" className="gap-1.5">
-              <span>{kw}</span>
-              <button
-                type="button"
-                onClick={() => handleRemoveKeyword(kw)}
-                className="hover:text-rose-400 p-0.5 rounded"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </Badge>
-          ))}
-        </div>
+        <ChipList items={settings.protectedKeywords} onRemove={handleRemoveKeyword} empty="No keywords yet." />
       </Card>
 
-      {/* Protected Regex Patterns */}
       <Card>
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
-          <Shield className="w-4 h-4 text-brand-400" />
-          <h5 className="font-semibold text-sm text-white">Protected Regex Patterns</h5>
-        </div>
-
-        <p className="text-xs text-slate-400 mt-2">
-          Advanced expression matching for conversations prefix tags or project naming conventions.
-        </p>
-
-        {/* Input form */}
-        <form onSubmit={handleAddPattern} className="mt-3 flex items-center gap-2">
+        <CardHeader
+          icon={<Regex />}
+          title="Protected patterns"
+          description="Regular expressions matched against titles. Useful for tags like [work]."
+        />
+        <form onSubmit={handleAddPattern} className="flex gap-2">
           <input
             type="text"
             value={newPattern}
-            onChange={(e) => setNewPattern(e.target.value)}
-            placeholder="Add regex (e.g. ^\[work\].*, ^client_.*)..."
-            className="flex-1 px-3 py-1.5 font-mono text-xs rounded-lg bg-slate-950/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500"
+            onChange={(e) => {
+              setNewPattern(e.target.value);
+              if (patternError) setPatternError(null);
+            }}
+            placeholder="e.g. ^\[work\].*"
+            aria-label="New protected pattern"
+            aria-invalid={!!patternError}
+            className={`${inputClass} font-mono text-sm ${patternError ? 'border-danger focus:border-danger focus:ring-danger/20' : ''}`}
           />
-          <Button variant="secondary" size="sm" type="submit" icon={<Plus className="w-3.5 h-3.5" />}>
-            Add Pattern
+          <Button variant="secondary" size="md" type="submit" icon={<Plus />}>
+            Add
           </Button>
         </form>
-
         {patternError && (
-          <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-            <AlertCircle className="w-3.5 h-3.5" />
+          <p className="mt-2 flex items-center gap-1.5 text-sm text-danger-text">
+            <AlertCircle className="size-4" />
             {patternError}
           </p>
         )}
-
-        {/* Patterns list */}
-        <div className="mt-4 flex flex-wrap gap-2">
-          {settings.protectedRegexPatterns.map((pat) => (
-            <Badge key={pat} variant="slate" size="md" className="font-mono gap-1.5">
-              <span>{pat}</span>
-              <button
-                type="button"
-                onClick={() => handleRemovePattern(pat)}
-                className="hover:text-rose-400 p-0.5 rounded"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </Badge>
-          ))}
-        </div>
+        <ChipList items={settings.protectedRegexPatterns} onRemove={handleRemovePattern} empty="No patterns yet." mono />
       </Card>
     </div>
+  );
+};
+
+const ChipList: React.FC<{ items: string[]; onRemove: (item: string) => void; empty: string; mono?: boolean }> = ({
+  items,
+  onRemove,
+  empty,
+  mono,
+}) => {
+  if (items.length === 0) return <p className="mt-4 text-sm text-fg-subtle">{empty}</p>;
+  return (
+    <ul className="mt-4 flex flex-wrap gap-2">
+      {items.map((item) => (
+        <li
+          key={item}
+          className={`inline-flex items-center gap-1 rounded-lg border border-border bg-surface-2 py-1 pl-3 pr-1 text-sm ${
+            mono ? 'font-mono' : ''
+          }`}
+        >
+          <span>{item}</span>
+          <button
+            type="button"
+            onClick={() => onRemove(item)}
+            aria-label={`Remove ${item}`}
+            className="flex size-6 items-center justify-center rounded-md text-fg-subtle hover:bg-danger-soft hover:text-danger-text"
+          >
+            <X className="size-3.5" />
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 };

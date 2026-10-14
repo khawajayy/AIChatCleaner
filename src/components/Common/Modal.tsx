@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useId } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -10,6 +10,14 @@ interface ModalProps {
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
+const maxWidthStyles = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+};
+
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
@@ -18,54 +26,52 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   maxWidth = 'lg',
 }) => {
+  const titleId = useId();
+
   useEffect(() => {
+    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
-  const maxWidthStyles = {
-    sm: 'max-w-sm',
-    md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-xl',
-    '2xl': 'max-w-2xl',
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] animate-fade-in" onClick={onClose} />
 
-      {/* Modal Dialog */}
       <div
-        className={`relative w-full ${maxWidthStyles[maxWidth]} rounded-2xl border border-slate-750 bg-slate-900 shadow-2xl p-6 text-slate-100 z-10 animate-in fade-in zoom-in-95 duration-150`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className={`relative z-10 flex w-full ${maxWidthStyles[maxWidth]} max-h-[calc(100vh-2rem)] flex-col rounded-2xl border border-border bg-surface text-fg shadow-pop animate-pop-in`}
       >
-        <div className="flex items-start justify-between pb-3 border-b border-slate-800">
+        <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-border">
           <div>
-            <h3 className="text-lg font-semibold text-white tracking-tight">{title}</h3>
-            {description && (
-              <p className="text-xs text-slate-400 mt-1">{description}</p>
-            )}
+            <h2 id={titleId} className="text-xl font-semibold tracking-tight">
+              {title}
+            </h2>
+            {description && <p className="mt-1 text-sm text-fg-muted">{description}</p>}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            aria-label="Close dialog"
+            className="-mr-2 -mt-1 rounded-lg p-2 text-fg-subtle hover:bg-surface-2 hover:text-fg transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="size-5" />
           </button>
         </div>
 
-        <div className="mt-4">{children}</div>
+        <div className="overflow-y-auto px-6 py-5">{children}</div>
       </div>
     </div>
   );

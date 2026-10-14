@@ -1,169 +1,168 @@
 import React from 'react';
-import { Card } from '../Common/Card';
+import { Card, CardHeader } from '../Common/Card';
+import { Switch } from '../Common/Switch';
+import { ThemeToggle } from '../Common/ThemeToggle';
+import { PlatformMark, PLATFORM_META } from '../Common/PlatformMark';
+import { inputClass } from '../Common/formStyles';
 import { UserSettings, PlatformId } from '../../types';
-import { ShieldCheck, Sliders, Layers } from 'lucide-react';
+import { ShieldCheck, SlidersHorizontal, Layers, Palette } from 'lucide-react';
 
 interface GeneralSettingsProps {
   settings: UserSettings;
   onUpdate: (partial: Partial<UserSettings>) => void;
 }
 
+const SettingRow: React.FC<{ title: string; description: string; children: React.ReactNode }> = ({
+  title,
+  description,
+  children,
+}) => (
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
+    <div className="max-w-lg">
+      <p className="text-[15px] font-medium">{title}</p>
+      <p className="mt-0.5 text-sm text-fg-muted">{description}</p>
+    </div>
+    <div className="shrink-0">{children}</div>
+  </div>
+);
+
 export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUpdate }) => {
   const togglePlatform = (p: PlatformId) => {
     onUpdate({
-      enabledPlatforms: {
-        ...settings.enabledPlatforms,
-        [p]: !settings.enabledPlatforms[p],
-      },
+      enabledPlatforms: { ...settings.enabledPlatforms, [p]: !settings.enabledPlatforms[p] },
     });
   };
 
   return (
     <div className="space-y-6">
-      {/* Safety Defaults */}
       <Card>
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
-          <ShieldCheck className="w-4 h-4 text-brand-400" />
-          <h5 className="font-semibold text-sm text-white">Execution Safety Controls</h5>
-        </div>
+        <CardHeader icon={<Palette />} title="Appearance" description="Choose a theme or follow your system setting." />
+        <SettingRow title="Theme" description="Applies to the popup and this dashboard.">
+          <ThemeToggle showLabels />
+        </SettingRow>
+      </Card>
 
-        <div className="mt-4 space-y-4 text-xs">
-          {/* Dry Run Default */}
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <span className="font-semibold text-slate-200">Default to Dry-Run Mode</span>
-              <p className="text-slate-400 text-[11px] mt-0.5">
-                When enabled, batch actions default to a simulated trial so you can preview operations before anything is deleted.
-              </p>
-            </div>
-            <input
-              type="checkbox"
+      <Card>
+        <CardHeader icon={<ShieldCheck />} title="Safety" description="Limits that apply to every batch action." />
+        <div className="divide-y divide-border">
+          <SettingRow
+            title="Dry run by default"
+            description="New batch actions start as a simulation so you can check them first."
+          >
+            <Switch
               checked={settings.dryRunDefault}
-              onChange={(e) => onUpdate({ dryRunDefault: e.target.checked })}
-              className="mt-1 rounded border-slate-700 bg-slate-800 text-brand-500 focus:ring-brand-400 cursor-pointer"
+              onChange={(v) => onUpdate({ dryRunDefault: v })}
+              label="Dry run by default"
             />
-          </div>
+          </SettingRow>
 
-          {/* Max Batch Size */}
-          <div className="pt-3 border-t border-slate-850 flex items-center justify-between gap-4">
-            <div>
-              <span className="font-semibold text-slate-200">Maximum Batch Size</span>
-              <p className="text-slate-400 text-[11px] mt-0.5">
-                Hard ceiling on the number of conversations processed in a single batch (1-50).
-              </p>
-            </div>
+          <SettingRow title="Maximum batch size" description="Most conversations processed in one batch (1–50).">
             <div className="flex items-center gap-2">
               <input
                 type="number"
-                min="1"
-                max="50"
+                min={1}
+                max={50}
                 value={settings.maxBatchSize}
                 onChange={(e) => onUpdate({ maxBatchSize: Math.max(1, Math.min(50, Number(e.target.value))) })}
-                className="w-16 px-2.5 py-1 text-center font-mono rounded-lg bg-slate-800 border border-slate-700 text-slate-200"
+                className={`${inputClass} w-24 text-center tabular-nums`}
               />
-              <span className="text-slate-400 text-[11px]">chats</span>
+              <span className="text-sm text-fg-muted">chats</span>
             </div>
-          </div>
+          </SettingRow>
 
-          {/* Action Delay Pacing */}
-          <div className="pt-3 border-t border-slate-850 flex items-center justify-between gap-4">
-            <div>
-              <span className="font-semibold text-slate-200">Sequential Action Delay</span>
-              <p className="text-slate-400 text-[11px] mt-0.5">
-                Safe delay between actions to avoid rate limits and allow visual verification.
-              </p>
-            </div>
+          <SettingRow title="Delay between actions" description="Pause between each action to avoid rate limits.">
             <div className="flex items-center gap-2">
               <input
                 type="number"
-                min="500"
-                max="5000"
-                step="100"
+                min={500}
+                max={5000}
+                step={100}
                 value={settings.actionDelayMs}
-                onChange={(e) => onUpdate({ actionDelayMs: Number(e.target.value) })}
-                className="w-20 px-2.5 py-1 text-center font-mono rounded-lg bg-slate-800 border border-slate-700 text-slate-200"
+                onChange={(e) => onUpdate({ actionDelayMs: Math.max(500, Math.min(5000, Number(e.target.value))) })}
+                className={`${inputClass} w-24 text-center tabular-nums`}
               />
-              <span className="text-slate-400 text-[11px]">ms</span>
+              <span className="text-sm text-fg-muted">ms</span>
             </div>
-          </div>
+          </SettingRow>
         </div>
       </Card>
 
-      {/* Classification Thresholds */}
       <Card>
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
-          <Sliders className="w-4 h-4 text-brand-400" />
-          <h5 className="font-semibold text-sm text-white">Classification Thresholds</h5>
-        </div>
-
-        <div className="mt-4 space-y-4 text-xs">
-          {/* Minimum Age */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="font-semibold text-slate-200">Minimum Age Protection Window</span>
-              <span className="font-mono text-brand-400">{settings.minimumAgeDays} days</span>
-            </div>
-            <p className="text-slate-400 text-[11px] mb-2">
-              Conversations newer than this threshold are protected from cleanup suggestions unless explicitly empty.
-            </p>
-            <input
-              type="range"
-              min="0"
-              max="30"
-              value={settings.minimumAgeDays}
-              onChange={(e) => onUpdate({ minimumAgeDays: Number(e.target.value) })}
-              className="w-full accent-brand-500 cursor-pointer"
-            />
-          </div>
-
-          {/* Confidence Threshold */}
-          <div className="pt-3 border-t border-slate-850">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="font-semibold text-slate-200">Cleanup Confidence Threshold</span>
-              <span className="font-mono text-brand-400">{Math.round(settings.confidenceThreshold * 100)}%</span>
-            </div>
-            <p className="text-slate-400 text-[11px] mb-2">
-              Suggestions with confidence below this threshold are downgraded to "Needs Review" instead of direct cleanup candidates.
-            </p>
-            <input
-              type="range"
-              min="0.5"
-              max="0.95"
-              step="0.05"
-              value={settings.confidenceThreshold}
-              onChange={(e) => onUpdate({ confidenceThreshold: Number(e.target.value) })}
-              className="w-full accent-brand-500 cursor-pointer"
-            />
-          </div>
+        <CardHeader icon={<SlidersHorizontal />} title="Classification" description="How aggressive cleanup suggestions are." />
+        <div className="space-y-6">
+          <RangeSetting
+            title="Minimum age"
+            description="Conversations newer than this are never suggested for cleanup, unless empty."
+            value={settings.minimumAgeDays}
+            display={`${settings.minimumAgeDays} day${settings.minimumAgeDays === 1 ? '' : 's'}`}
+            min={0}
+            max={30}
+            step={1}
+            onChange={(v) => onUpdate({ minimumAgeDays: v })}
+          />
+          <RangeSetting
+            title="Cleanup confidence threshold"
+            description="Below this, a suggestion goes to Needs review instead of Cleanup."
+            value={settings.confidenceThreshold}
+            display={`${Math.round(settings.confidenceThreshold * 100)}%`}
+            min={0.5}
+            max={0.95}
+            step={0.05}
+            onChange={(v) => onUpdate({ confidenceThreshold: v })}
+          />
         </div>
       </Card>
 
-      {/* Platform Toggles */}
       <Card>
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
-          <Layers className="w-4 h-4 text-brand-400" />
-          <h5 className="font-semibold text-sm text-white">Supported Platforms</h5>
-        </div>
-
-        <div className="mt-4 space-y-3 text-xs">
-          {(['chatgpt', 'gemini', 'claude'] as PlatformId[]).map((p) => {
-            const name = p === 'chatgpt' ? 'ChatGPT (chatgpt.com)' : p === 'gemini' ? 'Google Gemini (gemini.google.com)' : 'Anthropic Claude (claude.ai)';
-            const enabled = settings.enabledPlatforms[p];
-
-            return (
-              <div key={p} className="flex items-center justify-between py-1.5">
-                <span className="text-slate-200 font-medium">{name}</span>
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={() => togglePlatform(p)}
-                  className="rounded border-slate-700 bg-slate-800 text-brand-500 focus:ring-brand-400 cursor-pointer"
-                />
+        <CardHeader icon={<Layers />} title="Platforms" description="Turn off platforms you don't use." />
+        <div className="divide-y divide-border">
+          {(Object.keys(PLATFORM_META) as PlatformId[]).map((p) => (
+            <div key={p} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+              <div className="flex items-center gap-3">
+                <PlatformMark platform={p} />
+                <div>
+                  <p className="text-[15px] font-medium">{PLATFORM_META[p].name}</p>
+                  <p className="text-sm text-fg-subtle">{PLATFORM_META[p].host}</p>
+                </div>
               </div>
-            );
-          })}
+              <Switch
+                checked={settings.enabledPlatforms[p]}
+                onChange={() => togglePlatform(p)}
+                label={`Enable ${PLATFORM_META[p].name}`}
+              />
+            </div>
+          ))}
         </div>
       </Card>
     </div>
   );
 };
+
+const RangeSetting: React.FC<{
+  title: string;
+  description: string;
+  value: number;
+  display: string;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}> = ({ title, description, value, display, min, max, step, onChange }) => (
+  <div>
+    <div className="flex items-baseline justify-between gap-3">
+      <p className="text-[15px] font-medium">{title}</p>
+      <span className="rounded-md bg-surface-2 px-2 py-0.5 text-sm font-semibold tabular-nums">{display}</span>
+    </div>
+    <p className="mt-0.5 text-sm text-fg-muted">{description}</p>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      aria-label={title}
+      className="mt-3 w-full cursor-pointer"
+    />
+  </div>
+);

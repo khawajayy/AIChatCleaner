@@ -1,5 +1,4 @@
 import React from 'react';
-import { Card } from '../Common/Card';
 
 interface StatCardProps {
   title: string;
@@ -11,6 +10,13 @@ interface StatCardProps {
   accentColor?: 'brand' | 'amber' | 'rose' | 'blue';
 }
 
+const iconTone = {
+  brand: 'bg-accent-soft text-accent-text',
+  amber: 'bg-warning-soft text-warning-text',
+  rose: 'bg-danger-soft text-danger-text',
+  blue: 'bg-info-soft text-info-text',
+};
+
 export const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
@@ -20,31 +26,23 @@ export const StatCard: React.FC<StatCardProps> = ({
   onClick,
   accentColor = 'brand',
 }) => {
-  const accentGlow = {
-    brand: 'border-l-4 border-l-brand-500',
-    amber: 'border-l-4 border-l-amber-500',
-    rose: 'border-l-4 border-l-rose-500',
-    blue: 'border-l-4 border-l-blue-500',
-  };
-
   return (
-    <Card
+    <button
+      type="button"
       onClick={onClick}
-      className={`relative overflow-hidden cursor-pointer hover:border-slate-700 transition-all ${accentGlow[accentColor]}`}
+      className="group w-full rounded-xl border border-border bg-surface p-5 text-left shadow-card transition-colors hover:border-border-strong"
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{title}</p>
-          <h4 className="text-3xl font-bold text-white mt-1.5 tracking-tight font-mono">{value}</h4>
-          <p className="text-xs text-slate-400 mt-2">{subtitle}</p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="p-2.5 rounded-xl bg-slate-800 text-slate-300 border border-slate-700/60">
-            {icon}
-          </div>
-          {badge}
-        </div>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[15px] font-medium text-fg-muted">{title}</p>
+        <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg [&_svg]:size-5 ${iconTone[accentColor]}`}>
+          {icon}
+        </span>
       </div>
-    </Card>
+      <p className="mt-1 text-4xl font-semibold tracking-tight tabular-nums">{value}</p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-sm text-fg-subtle">{subtitle}</p>
+        {badge}
+      </div>
+    </button>
   );
 };

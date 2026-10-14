@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
     claude: true,
   },
   autoScanOnVisit: false,
-  theme: 'dark',
+  theme: 'system',
   onboardingCompleted: false,
   aiClassificationOptIn: false,
 };

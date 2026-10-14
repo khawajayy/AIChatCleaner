@@ -11,7 +11,7 @@ import {
   INITIAL_STORAGE_STATE,
 } from './schema';
 
-const STORAGE_KEY = 'chatsweep_state_v1';
+export const STORAGE_KEY = 'chatsweep_state_v1';
 
 // In-memory fallback if neither chrome.storage nor localStorage is available
 let memoryFallback: StorageSchema = structuredClone(INITIAL_STORAGE_STATE);

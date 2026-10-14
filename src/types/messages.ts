@@ -53,6 +53,8 @@ export type ExtensionMessage =
     };
 
 export type ContentScriptMessage =
+  | { type: 'CONTENT_PING' }
+  | { type: 'CONTENT_CHECK_PRESENT'; chatId: string }
   | { type: 'CONTENT_DISCOVER_CHATS' }
   | {
       type: 'CONTENT_DISCOVER_CHATS_RESULT';
@@ -62,7 +64,7 @@ export type ContentScriptMessage =
     }
   | {
       type: 'CONTENT_EXECUTE_ACTION';
-      chatId: string;
+      chat: ChatMetadata;
       action: 'archive' | 'delete';
       dryRun: boolean;
     }

@@ -1,6 +1,8 @@
 import { StorageManager } from '../storage/storage-manager';
 import { ClassificationEngine } from '../classifier/engine';
 import { SafeBatchExecutor } from './batch-executor';
+import { TabActionDispatcher, findPlatformTab, ensureContentScript, sendToTab } from './tab-dispatcher';
+import { platformFromUrl } from '../adapters/platform-urls';
 import { ExtensionMessage } from '../types/messages';
 import { PlatformId } from '../types';
 
@@ -21,15 +23,17 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
 
 // Global message handler
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-  chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-    handleBackgroundMessage(message)
+  chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
+    // Content scripts only answer tabs.sendMessage; ignore anything they send here
+    if (sender.tab && platformFromUrl(sender.tab.url)) return false;
+    handleBackgroundMessage(message, sender)
       .then((res) => sendResponse(res))
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true; // Keep channel open for async response
   });
 }
 
-async function handleBackgroundMessage(message: ExtensionMessage): Promise<any> {
+async function handleBackgroundMessage(message: ExtensionMessage, sender: chrome.runtime.MessageSender): Promise<any> {
   switch (message.type) {
     case 'GET_STORAGE_DATA': {
       return await StorageManager.getState();
@@ -126,26 +130,32 @@ async function handleBackgroundMessage(message: ExtensionMessage): Promise<any> 
       const allChats = await StorageManager.getChats();
       const targetChats = allChats.filter((c) => message.chatIds.includes(c.id));
 
-      const batchResult = await SafeBatchExecutor.executeBatch(
-        targetChats,
-        message.action,
-        message.dryRun,
-        settings,
-        (progress) => {
-          // Broadcast progress to open dashboard/popup
-          chrome.runtime?.sendMessage?.({
-            type: 'BATCH_PROGRESS',
-            current: progress.current,
-            total: progress.total,
-            currentChat: progress.currentChatTitle,
-            result: progress.result,
-            isComplete: progress.isComplete,
-            cancelled: progress.cancelled,
-          }).catch(() => {});
-        }
-      );
-
-      return { success: true, ...batchResult };
+      // Actions run in each chat tab's content script; the dashboard tab is restored afterwards.
+      const dispatcher = new TabActionDispatcher(sender.tab);
+      try {
+        const batchResult = await SafeBatchExecutor.executeBatch(
+          targetChats,
+          message.action,
+          message.dryRun,
+          settings,
+          (progress) => {
+            // Broadcast progress to open dashboard/popup
+            chrome.runtime?.sendMessage?.({
+              type: 'BATCH_PROGRESS',
+              current: progress.current,
+              total: progress.total,
+              currentChat: progress.currentChatTitle,
+              result: progress.result,
+              isComplete: progress.isComplete,
+              cancelled: progress.cancelled,
+            }).catch(() => {});
+          },
+          dispatcher.dispatch
+        );
+        return { success: true, ...batchResult };
+      } finally {
+        await dispatcher.restore();
+      }
     }
 
     case 'CANCEL_BATCH': {
@@ -159,41 +169,26 @@ async function handleBackgroundMessage(message: ExtensionMessage): Promise<any> 
 }
 
 /**
- * Triggers a scan on the active or matching tab
+ * Scans the matching platform tab (active one preferred) and stores classified results.
  */
 async function triggerPlatformScan(targetPlatform?: PlatformId): Promise<any> {
   if (!chrome.tabs?.query) {
     return { success: false, error: 'chrome.tabs API unavailable' };
   }
 
-  // Find tabs matching platform
-  const tabs = await chrome.tabs.query({});
-  const candidateTab = tabs.find((t) => {
-    if (!t.url) return false;
-    if (targetPlatform) {
-      if (targetPlatform === 'chatgpt') return t.url.includes('chatgpt.com') || t.url.includes('chat.openai.com');
-      if (targetPlatform === 'gemini') return t.url.includes('gemini.google.com');
-      if (targetPlatform === 'claude') return t.url.includes('claude.ai');
-    }
-    return (
-      t.url.includes('chatgpt.com') ||
-      t.url.includes('gemini.google.com') ||
-      t.url.includes('claude.ai')
-    );
-  });
+  const candidateTab = await findPlatformTab(targetPlatform);
+  const detectedPlatform = platformFromUrl(candidateTab?.url);
 
-  if (!candidateTab || !candidateTab.id) {
+  if (!candidateTab?.id || !detectedPlatform) {
     return {
       success: false,
       error: `No open tab found for ${targetPlatform || 'supported AI chatbots'}. Please open ${targetPlatform || 'ChatGPT, Gemini, or Claude'} in a tab and log in.`,
     };
   }
 
-  // Send discovery message to content script
   try {
-    const response: any = await chrome.tabs.sendMessage(candidateTab.id, {
-      type: 'CONTENT_DISCOVER_CHATS',
-    });
+    await ensureContentScript(candidateTab.id);
+    const response: any = await sendToTab(candidateTab.id, { type: 'CONTENT_DISCOVER_CHATS' });
 
     if (!response || !response.success) {
       return {
@@ -207,16 +202,7 @@ async function triggerPlatformScan(targetPlatform?: PlatformId): Promise<any> {
 
     // Run discovered chats through classification engine
     const classifiedChats = ClassificationEngine.classifyBatch(rawChats, settings);
-
-    // Save into storage
     await StorageManager.saveChats(classifiedChats);
-
-    // Update platform status
-    const detectedPlatform: PlatformId = candidateTab.url?.includes('chatgpt.com')
-      ? 'chatgpt'
-      : candidateTab.url?.includes('gemini.google.com')
-      ? 'gemini'
-      : 'claude';
 
     await StorageManager.updatePlatformStatus(detectedPlatform, {
       lastScanTimestamp: Date.now(),

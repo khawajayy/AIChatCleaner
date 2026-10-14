@@ -2,8 +2,9 @@ import React from 'react';
 import { Card } from '../Common/Card';
 import { Badge } from '../Common/Badge';
 import { Button } from '../Common/Button';
+import { PlatformMark } from '../Common/PlatformMark';
 import { PlatformId } from '../../types';
-import { CheckCircle2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { Check, Minus, ExternalLink, RefreshCw } from 'lucide-react';
 import { AdapterRegistry } from '../../adapters/registry';
 
 interface PlatformStatusCardProps {
@@ -17,6 +18,16 @@ interface PlatformStatusCardProps {
   isScanning: boolean;
 }
 
+function formatLastScan(ts: number | null) {
+  if (!ts) return 'Never';
+  const diffMin = Math.floor((Date.now() - ts) / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours} h ago`;
+  return `${Math.floor(diffHours / 24)} d ago`;
+}
+
 export const PlatformStatusCard: React.FC<PlatformStatusCardProps> = ({
   platform,
   name,
@@ -27,104 +38,62 @@ export const PlatformStatusCard: React.FC<PlatformStatusCardProps> = ({
   onScan,
   isScanning,
 }) => {
-  const adapter = AdapterRegistry.getAdapter(platform);
-  const caps = adapter?.capabilities;
-
-  const formatLastScan = (ts: number | null) => {
-    if (!ts) return 'Never scanned';
-    const diffMin = Math.floor((Date.now() - ts) / (1000 * 60));
-    if (diffMin < 1) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHours = Math.floor(diffMin / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${Math.floor(diffHours / 24)}d ago`;
-  };
+  const caps = AdapterRegistry.getAdapter(platform)?.capabilities;
 
   return (
-    <Card className="flex flex-col justify-between">
-      <div>
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-brand-400">
-              {name.charAt(0)}
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h5 className="font-semibold text-sm text-white">{name}</h5>
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-slate-500 hover:text-slate-300"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-              <p className="text-[11px] text-slate-400 font-mono">{url.replace('https://', '')}</p>
-            </div>
-          </div>
-
-          {connected ? (
-            <Badge variant="green" size="sm">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-              Connected
-            </Badge>
-          ) : (
-            <Badge variant="slate" size="sm">
-              <AlertCircle className="w-3 h-3 text-slate-400" />
-              Tab Standby
-            </Badge>
-          )}
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-2 mt-4 py-3 border-y border-slate-800/80">
-          <div>
-            <span className="text-[11px] text-slate-400">Discovered</span>
-            <p className="text-lg font-bold text-white font-mono">{totalDiscovered}</p>
-          </div>
-          <div>
-            <span className="text-[11px] text-slate-400">Last Scanned</span>
-            <p className="text-xs text-slate-300 mt-1 font-medium">{formatLastScan(lastScanTimestamp)}</p>
+    <Card padding="md" className="flex flex-col">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <PlatformMark platform={platform} size="lg" />
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold truncate">{name}</h3>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-fg-muted hover:text-accent-text"
+            >
+              {url.replace('https://', '')}
+              <ExternalLink className="size-3.5" />
+            </a>
           </div>
         </div>
-
-        {/* Capabilities */}
-        <div className="mt-3 space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400">Archive Support:</span>
-            <span className={caps?.supportsArchive ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
-              {caps?.supportsArchive ? 'Supported' : 'Not Available in Web UI'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400">Delete Support:</span>
-            <span className={caps?.supportsDelete ? 'text-emerald-400 font-medium' : 'text-slate-500'}>
-              Supported
-            </span>
-          </div>
-        </div>
-
-        {/* Honest Limitations note */}
-        {caps?.limitations && caps.limitations.length > 0 && (
-          <div className="mt-3 p-2 rounded-lg bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 leading-relaxed">
-            <span className="text-slate-300 font-medium">Platform Note: </span>
-            {caps.limitations[0]}
-          </div>
-        )}
+        {connected ? <Badge variant="green" size="sm">Scanned</Badge> : <Badge variant="slate" size="sm">Not scanned</Badge>}
       </div>
 
-      <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-end">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => onScan(platform)}
-          isLoading={isScanning}
-          icon={<RefreshCw className="w-3 h-3" />}
-        >
-          Scan {name}
+      <dl className="mt-5 grid grid-cols-2 gap-4 rounded-lg bg-surface-2 px-4 py-3">
+        <div>
+          <dt className="text-sm text-fg-muted">Found</dt>
+          <dd className="text-2xl font-semibold tabular-nums">{totalDiscovered}</dd>
+        </div>
+        <div>
+          <dt className="text-sm text-fg-muted">Last scan</dt>
+          <dd className="mt-1.5 text-[15px] font-medium">{formatLastScan(lastScanTimestamp)}</dd>
+        </div>
+      </dl>
+
+      <ul className="mt-4 space-y-2 text-sm">
+        <Capability label="Delete" supported={!!caps?.supportsDelete} />
+        <Capability label="Archive" supported={!!caps?.supportsArchive} />
+      </ul>
+
+      {caps?.limitations?.[0] && <p className="mt-4 text-sm text-fg-subtle leading-relaxed">{caps.limitations[0]}</p>}
+
+      <div className="mt-auto pt-5">
+        <Button variant="secondary" size="md" fullWidth onClick={() => onScan(platform)} disabled={isScanning} icon={<RefreshCw />}>
+          Scan {name.split(' ').pop()}
         </Button>
       </div>
     </Card>
   );
 };
+
+const Capability: React.FC<{ label: string; supported: boolean }> = ({ label, supported }) => (
+  <li className="flex items-center justify-between">
+    <span className="text-fg-muted">{label}</span>
+    <span className={`inline-flex items-center gap-1.5 font-medium ${supported ? 'text-accent-text' : 'text-fg-subtle'}`}>
+      {supported ? <Check className="size-4" /> : <Minus className="size-4" />}
+      {supported ? 'Supported' : 'Not available'}
+    </span>
+  </li>
+);
