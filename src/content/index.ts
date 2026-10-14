@@ -1,27 +1,30 @@
 import { AdapterRegistry } from '../adapters/registry';
 import { ContentScriptMessage } from '../types/messages';
+import { ActionResult } from '../types';
 
-console.log('[ChatSweep] Content script loaded on:', window.location.hostname);
+// The background worker may inject this file into tabs opened before install;
+// guard so a tab that already has the manifest-injected copy doesn't get two listeners.
+const LOADED_FLAG = '__chatsweepContentLoaded';
 
-// Detect which adapter matches current page
-const currentAdapter = AdapterRegistry.detectCurrentAdapter();
+if (!(window as any)[LOADED_FLAG]) {
+  (window as any)[LOADED_FLAG] = true;
+  console.log('[ChatSweep] Content script loaded on:', window.location.hostname);
 
-if (currentAdapter) {
-  console.log(`[ChatSweep] Matched adapter: ${currentAdapter.displayName}`);
+  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((message: ContentScriptMessage, _sender, sendResponse) => {
+      handleMessage(message)
+        .then((res) => sendResponse(res))
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+      return true; // Keep channel open for async response
+    });
+  }
 }
 
-// Listen for messages from background script or popup
-if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-  chrome.runtime.onMessage.addListener((message: ContentScriptMessage, _sender, sendResponse) => {
-    handleMessage(message)
-      .then((res) => sendResponse(res))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
-    return true; // Keep channel open for async response
-  });
-}
+// Only one destructive action at a time per tab
+let actionInFlight = false;
 
 async function handleMessage(message: ContentScriptMessage) {
-  const adapter = currentAdapter || AdapterRegistry.detectCurrentAdapter();
+  const adapter = AdapterRegistry.detectCurrentAdapter();
   if (!adapter) {
     return {
       success: false,
@@ -30,14 +33,20 @@ async function handleMessage(message: ContentScriptMessage) {
   }
 
   switch (message.type) {
+    case 'CONTENT_PING':
+      return { ok: true, platform: adapter.platform };
+
+    case 'CONTENT_CHECK_PRESENT':
+      return {
+        success: true,
+        present: adapter.isChatPresent(message.chatId),
+        linkCount: adapter.countChatLinks(),
+      };
+
     case 'CONTENT_DISCOVER_CHATS': {
       try {
         const chats = await adapter.discoverChats();
-        return {
-          type: 'CONTENT_DISCOVER_CHATS_RESULT',
-          success: true,
-          chats,
-        };
+        return { type: 'CONTENT_DISCOVER_CHATS_RESULT', success: true, chats };
       } catch (err: any) {
         return {
           type: 'CONTENT_DISCOVER_CHATS_RESULT',
@@ -49,60 +58,43 @@ async function handleMessage(message: ContentScriptMessage) {
     }
 
     case 'CONTENT_EXECUTE_ACTION': {
+      const { chat, action, dryRun } = message;
+      const fail = (error: string): ActionResult => ({
+        success: false,
+        action: dryRun ? 'dry_run' : action,
+        chatId: chat?.id ?? '',
+        platform: adapter.platform,
+        timestamp: Date.now(),
+        verified: false,
+        error,
+      });
+
+      if (!chat?.id) return { type: 'CONTENT_EXECUTE_ACTION_RESULT', result: fail('No conversation was specified.') };
+      if (chat.platform !== adapter.platform) {
+        return {
+          type: 'CONTENT_EXECUTE_ACTION_RESULT',
+          result: fail(`This conversation belongs to ${chat.platform}, not ${adapter.displayName}.`),
+        };
+      }
+      if (actionInFlight) {
+        return { type: 'CONTENT_EXECUTE_ACTION_RESULT', result: fail('Another action is already running in this tab.') };
+      }
+
+      actionInFlight = true;
       try {
-        let result;
-        const dummyChat = {
-          id: message.chatId,
-          platform: adapter.platform,
-          title: '',
-          url: '',
-          lastActivityTimestamp: null,
-          messageCount: null,
-          isEmpty: false,
-          isUnfinished: false,
-          category: 'cleanup' as const,
-          confidence: 1,
-          reasons: [],
-          lastScannedAt: Date.now(),
-          supportsArchive: adapter.capabilities.supportsArchive,
-          supportsDelete: adapter.capabilities.supportsDelete,
-          status: 'discovered' as const,
-          isProtected: false,
-        };
-
-        if (message.action === 'delete') {
-          result = await adapter.deleteChat(dummyChat, message.dryRun);
-        } else if (message.action === 'archive' && adapter.archiveChat) {
-          result = await adapter.archiveChat(dummyChat, message.dryRun);
+        let result: ActionResult;
+        if (action === 'delete') {
+          result = await adapter.deleteChat(chat, dryRun);
+        } else if (action === 'archive' && adapter.archiveChat) {
+          result = await adapter.archiveChat(chat, dryRun);
         } else {
-          result = {
-            success: false,
-            action: message.action,
-            chatId: message.chatId,
-            platform: adapter.platform,
-            timestamp: Date.now(),
-            verified: false,
-            error: `Action ${message.action} is not supported on ${adapter.displayName}`,
-          };
+          result = fail(`Action ${action} is not supported on ${adapter.displayName}`);
         }
-
-        return {
-          type: 'CONTENT_EXECUTE_ACTION_RESULT',
-          result,
-        };
+        return { type: 'CONTENT_EXECUTE_ACTION_RESULT', result };
       } catch (err: any) {
-        return {
-          type: 'CONTENT_EXECUTE_ACTION_RESULT',
-          result: {
-            success: false,
-            action: message.action,
-            chatId: message.chatId,
-            platform: adapter.platform,
-            timestamp: Date.now(),
-            verified: false,
-            error: err.message || 'Execution failed in content script',
-          },
-        };
+        return { type: 'CONTENT_EXECUTE_ACTION_RESULT', result: fail(err.message || 'Execution failed in content script') };
+      } finally {
+        actionInFlight = false;
       }
     }
 

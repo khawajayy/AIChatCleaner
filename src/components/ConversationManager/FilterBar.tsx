@@ -1,6 +1,7 @@
 import React from 'react';
-import { Search, Filter, ArrowUpDown } from 'lucide-react';
+import { Search, Lock } from 'lucide-react';
 import { PlatformId, ClassificationCategory } from '../../types';
+import { inputClass, selectClass } from '../Common/formStyles';
 
 interface FilterBarProps {
   searchQuery: string;
@@ -28,73 +29,68 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onToggleProtectedOnly,
 }) => {
   return (
-    <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-4 rounded-xl border border-slate-800 bg-slate-900/60 backdrop-blur-md">
-      {/* Search Input */}
-      <div className="relative flex-1">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+    <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+      <div className="relative flex-1 min-w-0">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-[18px] -translate-y-1/2 text-fg-subtle" />
         <input
-          type="text"
+          type="search"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search conversation titles..."
-          className="w-full pl-9 pr-3 py-2 text-xs rounded-lg bg-slate-950/70 border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+          placeholder="Search titles and reasons"
+          aria-label="Search conversations"
+          className={`${inputClass} pl-10`}
         />
       </div>
 
-      {/* Filter Selectors */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Platform Filter */}
-        <div className="flex items-center gap-1.5 text-xs text-slate-400">
-          <Filter className="w-3.5 h-3.5" />
-          <select
-            value={selectedPlatform}
-            onChange={(e) => onPlatformChange(e.target.value as any)}
-            className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-brand-500"
-          >
-            <option value="all">All Platforms</option>
-            <option value="chatgpt">ChatGPT</option>
-            <option value="gemini">Google Gemini</option>
-            <option value="claude">Anthropic Claude</option>
-          </select>
-        </div>
+        <select
+          value={selectedPlatform}
+          onChange={(e) => onPlatformChange(e.target.value as PlatformId | 'all')}
+          aria-label="Filter by platform"
+          className={selectClass}
+        >
+          <option value="all">All platforms</option>
+          <option value="chatgpt">ChatGPT</option>
+          <option value="gemini">Gemini</option>
+          <option value="claude">Claude</option>
+        </select>
 
-        {/* Category Filter */}
         <select
           value={selectedCategory}
-          onChange={(e) => onCategoryChange(e.target.value as any)}
-          className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-brand-500"
+          onChange={(e) => onCategoryChange(e.target.value as ClassificationCategory | 'all')}
+          aria-label="Filter by classification"
+          className={selectClass}
         >
-          <option value="all">All Classifications</option>
-          <option value="cleanup">Cleanup Candidates</option>
-          <option value="review">Needs Review</option>
+          <option value="all">All classifications</option>
+          <option value="cleanup">Cleanup</option>
+          <option value="review">Needs review</option>
           <option value="keep">Keep</option>
         </select>
 
-        {/* Protected Only Toggle */}
+        <select
+          value={sortBy}
+          onChange={(e) => onSortChange(e.target.value as 'date' | 'title' | 'confidence')}
+          aria-label="Sort order"
+          className={selectClass}
+        >
+          <option value="date">Most recent</option>
+          <option value="confidence">Highest confidence</option>
+          <option value="title">Title A–Z</option>
+        </select>
+
         <button
+          type="button"
           onClick={onToggleProtectedOnly}
-          className={`px-2.5 py-1.5 text-xs rounded-lg border transition-colors ${
+          aria-pressed={protectedOnly}
+          className={`inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-[15px] font-medium transition-colors ${
             protectedOnly
-              ? 'bg-brand-500/10 border-brand-500/40 text-brand-400'
-              : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+              ? 'border-accent bg-accent-soft text-accent-text'
+              : 'border-border bg-surface text-fg-muted hover:border-border-strong hover:text-fg'
           }`}
         >
-          Protected Only
+          <Lock className="size-4" />
+          Protected only
         </button>
-
-        {/* Sort By */}
-        <div className="flex items-center gap-1 text-xs text-slate-400 pl-2 border-l border-slate-800">
-          <ArrowUpDown className="w-3.5 h-3.5" />
-          <select
-            value={sortBy}
-            onChange={(e) => onSortChange(e.target.value as any)}
-            className="px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:border-brand-500"
-          >
-            <option value="date">Sort: Recent First</option>
-            <option value="confidence">Sort: Highest Confidence</option>
-            <option value="title">Sort: Title (A-Z)</option>
-          </select>
-        </div>
       </div>
     </div>
   );

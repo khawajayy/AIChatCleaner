@@ -35,4 +35,10 @@ export interface ChatAdapter {
   deleteChat(chat: ChatMetadata, dryRun?: boolean): Promise<ActionResult>;
 
   validateChatIdentity(chat: ChatMetadata): Promise<boolean>;
+
+  /** True when a link to this conversation id is currently in the page. */
+  isChatPresent(chatId: string): boolean;
+
+  /** Number of distinct conversation links currently in the page. */
+  countChatLinks(): number;
 }

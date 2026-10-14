@@ -1,0 +1,210 @@
+@import "tailwindcss";
+
+/* Class-based dark mode. ThemeProvider (and public/theme-init.js before first paint)
+   toggles `.dark` on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --canvas: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --surface-3: #e7eaee;
+  --border: #e2e5ea;
+  --border-strong: #cdd2d9;
+  --fg: #0e1217;
+  --fg-muted: #474f5c;
+  --fg-subtle: #6b7380;
+
+  --accent: #15803d;
+  --accent-hover: #166534;
+  --accent-fg: #ffffff;
+  --accent-soft: #e6f4ea;
+  --accent-text: #15803d;
+
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-soft: #fdecec;
+  --danger-text: #b91c1c;
+
+  --warning-soft: #fdf2dc;
+  --warning-text: #a35200;
+
+  --info-soft: #e7eefc;
+  --info-text: #1d4ed8;
+
+  --violet-soft: #efe9fc;
+  --violet-text: #6d28d9;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.04);
+  --shadow-pop: 0 12px 32px -8px rgb(16 24 40 / 0.18), 0 4px 8px -4px rgb(16 24 40 / 0.08);
+
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #0c0e12;
+  --surface: #14171c;
+  --surface-2: #1b1f26;
+  --surface-3: #242931;
+  --border: #262b33;
+  --border-strong: #363c46;
+  --fg: #eef1f5;
+  --fg-muted: #b0b8c4;
+  --fg-subtle: #848d9a;
+
+  --accent: #22c55e;
+  --accent-hover: #4ade80;
+  --accent-fg: #03140a;
+  --accent-soft: rgb(34 197 94 / 0.13);
+  --accent-text: #4ade80;
+
+  --danger: #e5484d;
+  --danger-hover: #f2555a;
+  --danger-soft: rgb(229 72 77 / 0.14);
+  --danger-text: #ff7b7f;
+
+  --warning-soft: rgb(245 158 11 / 0.14);
+  --warning-text: #fbbf24;
+
+  --info-soft: rgb(59 130 246 / 0.15);
+  --info-text: #7cb0ff;
+
+  --violet-soft: rgb(139 92 246 / 0.16);
+  --violet-text: #b39dff;
+
+  --shadow-card: 0 0 0 0 transparent;
+  --shadow-pop: 0 16px 40px -8px rgb(0 0 0 / 0.6);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: var(--warning-text);
+  --color-info-soft: var(--info-soft);
+  --color-info-text: var(--info-text);
+  --color-violet-soft: var(--violet-soft);
+  --color-violet-text: var(--violet-text);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+}
+
+@theme {
+  /* System UI fonts: no remote font requests, matches the OS and stays crisp. */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+    "Helvetica Neue", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-pop-in: pop-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --animate-slide-up: slide-up 200ms ease-out;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@layer base {
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--fg);
+  }
+
+  input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 1.05rem;
+    height: 1.05rem;
+    cursor: pointer;
+  }
+  input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  input[type="range"] {
+    accent-color: var(--accent);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--fg-subtle);
+  }
+
+  .theme-switching *,
+  .theme-switching *::before,
+  .theme-switching *::after {
+    transition: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 1ms !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}

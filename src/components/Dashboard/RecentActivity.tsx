@@ -1,6 +1,7 @@
 import React from 'react';
-import { Card } from '../Common/Card';
+import { Card, CardHeader } from '../Common/Card';
 import { Badge } from '../Common/Badge';
+import { PLATFORM_META } from '../Common/PlatformMark';
 import { OperationLog } from '../../types';
 import { Check, X, Shield, Clock } from 'lucide-react';
 
@@ -8,75 +9,64 @@ interface RecentActivityProps {
   logs: OperationLog[];
 }
 
-export const RecentActivity: React.FC<RecentActivityProps> = ({ logs }) => {
-  const formatTime = (ts: number) => {
-    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+function formatTime(ts: number) {
+  const d = new Date(ts);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return sameDay
+    ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
 
+export const RecentActivity: React.FC<RecentActivityProps> = ({ logs }) => {
   return (
-    <Card className="mt-6">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-        <div>
-          <h5 className="font-semibold text-sm text-white flex items-center gap-2">
-            <Clock className="w-4 h-4 text-brand-400" />
-            Audit & Operation Trail
-          </h5>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Local verification records of dry-run and executed cleanup operations
-          </p>
-        </div>
-        <span className="text-xs text-slate-400 font-mono">
-          {logs.length} logged events
-        </span>
-      </div>
+    <Card>
+      <CardHeader
+        icon={<Clock />}
+        title="Activity log"
+        description="Dry runs and real actions, recorded locally."
+        action={<span className="text-sm text-fg-subtle tabular-nums">{logs.length} events</span>}
+      />
 
       {logs.length === 0 ? (
-        <div className="py-8 text-center text-slate-500 text-xs">
-          No cleanup operations executed yet. Run a scan and review flagged conversations to begin.
-        </div>
+        <p className="py-8 text-center text-[15px] text-fg-muted">
+          Nothing yet. Scan a platform and review what it finds to get started.
+        </p>
       ) : (
-        <div className="divide-y divide-slate-800/60 mt-2 max-h-60 overflow-y-auto">
-          {logs.slice(0, 10).map((log) => (
-            <div key={log.id} className="py-2.5 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
+        <ul className="-mx-6 -mb-6 divide-y divide-border max-h-96 overflow-y-auto">
+          {logs.slice(0, 20).map((log) => (
+            <li key={log.id} className="flex items-center gap-4 px-6 py-3.5">
+              <div className="w-24 shrink-0">
                 {log.action === 'dry_run' ? (
-                  <Badge variant="green" size="sm">
-                    <Shield className="w-3 h-3 text-emerald-400" />
-                    Dry-Run
+                  <Badge variant="slate" size="sm">
+                    <Shield />
+                    Dry run
                   </Badge>
                 ) : log.success ? (
-                  <Badge variant="blue" size="sm">
-                    <Check className="w-3 h-3 text-blue-400" />
+                  <Badge variant="green" size="sm">
+                    <Check />
                     {log.action === 'delete' ? 'Deleted' : 'Archived'}
                   </Badge>
                 ) : (
                   <Badge variant="rose" size="sm">
-                    <X className="w-3 h-3 text-rose-400" />
+                    <X />
                     Failed
                   </Badge>
                 )}
-
-                <div className="flex flex-col">
-                  <span className="text-slate-200 font-medium max-w-sm truncate">
-                    {log.chatTitle || `Chat ID: ${log.chatId}`}
-                  </span>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">
-                    {log.platform} {log.verified ? '• DOM Verified' : ''}
-                  </span>
-                </div>
               </div>
 
-              <div className="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
-                {log.error && (
-                  <span className="text-rose-400 max-w-xs truncate text-[10px]">
-                    {log.error}
-                  </span>
-                )}
-                <span>{formatTime(log.timestamp)}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-medium">{log.chatTitle || `Chat ${log.chatId}`}</p>
+                <p className="truncate text-sm text-fg-subtle">
+                  {PLATFORM_META[log.platform]?.shortName ?? log.platform}
+                  {log.verified && ' · verified'}
+                  {log.error && <span className="text-danger-text"> · {log.error}</span>}
+                </p>
               </div>
-            </div>
+
+              <span className="shrink-0 text-sm text-fg-subtle tabular-nums">{formatTime(log.timestamp)}</span>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </Card>
   );

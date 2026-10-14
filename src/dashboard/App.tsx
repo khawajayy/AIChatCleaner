@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Navbar } from '../components/Layout/Navbar';
+import { Sidebar, TopBar, DashboardTab, NAV_ITEMS } from '../components/Layout/Navbar';
 import { StatCard } from '../components/Dashboard/StatCard';
 import { PlatformStatusCard } from '../components/Dashboard/PlatformStatusCard';
 import { RecentActivity } from '../components/Dashboard/RecentActivity';
@@ -12,9 +12,9 @@ import { GeneralSettings } from '../components/Settings/GeneralSettings';
 import { ExclusionsManager } from '../components/Settings/ExclusionsManager';
 import { DataManagement } from '../components/Settings/DataManagement';
 import { OnboardingModal } from '../components/Onboarding/OnboardingModal';
+import { PLATFORM_META } from '../components/Common/PlatformMark';
 import { StorageManager } from '../storage/storage-manager';
 import { ClassificationEngine } from '../classifier/engine';
-import { SafeBatchExecutor } from '../background/batch-executor';
 import {
   ChatMetadata,
   UserSettings,
@@ -29,18 +29,24 @@ import {
   Trash2,
   HelpCircle,
   Shield,
-  Layers,
-  CheckCircle,
+  CheckCircle2,
   AlertCircle,
   Info,
+  X,
 } from 'lucide-react';
+
+const SETTINGS_SECTIONS = [
+  { id: 'general', label: 'Safety & general' },
+  { id: 'exclusions', label: 'Protection rules' },
+  { id: 'data', label: 'Privacy & data' },
+] as const;
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [chats, setChats] = useState<ChatMetadata[]>([]);
   const [logs, setLogs] = useState<OperationLog[]>([]);
   const [platformStatus, setPlatformStatus] = useState(INITIAL_STORAGE_STATE.platformStatus);
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<DashboardTab>('dashboard');
 
   const [isScanning, setIsScanning] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -277,23 +283,56 @@ export const App: React.FC = () => {
       isComplete: false,
     });
 
+    const action = confirmModal.action === 'archive' ? 'archive' : 'delete';
+    const isDryRun = confirmModal.isDryRun;
+    const requested = confirmModal.chats;
+
     try {
-      const result = await SafeBatchExecutor.executeBatch(
-        confirmModal.chats,
-        confirmModal.action === 'archive' ? 'archive' : 'delete',
-        confirmModal.isDryRun,
-        settings,
-        (p) => setBatchProgress(p)
-      );
+      if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+        throw new Error('Extension messaging is unavailable. Open the dashboard from the extension.');
+      }
 
-      setBannerNotice({
-        type: 'success',
-        message: confirmModal.isDryRun
-          ? `Dry-Run completed successfully: ${result.results.length} conversation(s) simulated.`
-          : `Batch executed: ${result.results.filter((r) => r.success).length} of ${result.results.length} operations completed safely.`,
+      // The background worker owns the batch and runs each action in the chat tab.
+      const response: any = await chrome.runtime.sendMessage({
+        type: 'EXECUTE_BATCH',
+        chatIds: requested.map((c) => c.id),
+        action,
+        dryRun: isDryRun,
       });
+      if (!response?.success) throw new Error(response?.error || 'The batch could not start.');
 
-      setSelectedIds([]);
+      const results: ActionResult[] = response.results ?? [];
+      const succeeded = results.filter((r) => r.success);
+      const firstFailure = results.find((r) => !r.success);
+      const failedTitle = firstFailure ? requested.find((c) => c.id === firstFailure.chatId)?.title : undefined;
+      const truncated = results.length < requested.length && !response.cancelled && !response.stoppedOnError;
+      const verb = action === 'delete' ? 'Deleted' : 'Archived';
+      const noun = (n: number) => `${n} conversation${n === 1 ? '' : 's'}`;
+      const limitNote = truncated ? ` Only the first ${results.length} ran because of the batch size limit.` : '';
+
+      if (response.cancelled) {
+        setBannerNotice({ type: 'info', message: `Stopped. ${succeeded.length} of ${requested.length} finished before you cancelled.` });
+      } else if (isDryRun) {
+        setBannerNotice(
+          firstFailure
+            ? {
+                type: 'error',
+                message: `Dry run: ${succeeded.length} of ${results.length} would work. "${failedTitle ?? firstFailure.chatId}": ${firstFailure.error}`,
+              }
+            : { type: 'success', message: `Dry run passed for ${noun(results.length)}. Nothing was changed.${limitNote}` }
+        );
+      } else if (firstFailure) {
+        setBannerNotice({
+          type: 'error',
+          message: `${verb} ${succeeded.length} of ${results.length}, then stopped for safety. "${failedTitle ?? firstFailure.chatId}": ${firstFailure.error}`,
+        });
+      } else {
+        setBannerNotice({ type: 'success', message: `${verb} ${noun(succeeded.length)}.${limitNote}` });
+      }
+
+      // Keep anything that didn't go through selected so it can be retried
+      const done = new Set(isDryRun ? [] : succeeded.map((r) => r.chatId));
+      setSelectedIds((prev) => (isDryRun && !firstFailure ? prev : prev.filter((id) => !done.has(id))));
       setConfirmModal((prev) => ({ ...prev, isOpen: false }));
       await loadData();
     } catch (err: any) {
@@ -308,7 +347,7 @@ export const App: React.FC = () => {
   };
 
   const handleCancelBatch = () => {
-    SafeBatchExecutor.cancel();
+    chrome.runtime?.sendMessage?.({ type: 'CANCEL_BATCH' }).catch(() => {});
   };
 
   // Filtered & Sorted Chats
@@ -342,282 +381,243 @@ export const App: React.FC = () => {
   const reviewCount = chats.filter((c) => c.category === 'review' && c.status !== 'deleted').length;
   const protectedCount = chats.filter((c) => c.isProtected).length;
 
+
+  const currentNav = NAV_ITEMS.find((n) => n.id === activeTab) ?? NAV_ITEMS[0];
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Navbar */}
-      <Navbar
+    <div className="flex min-h-screen bg-canvas text-fg">
+      <Sidebar
         settings={settings}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
-        onTriggerScan={() => handleTriggerScan()}
-        isScanning={isScanning}
         onOpenOnboarding={() => setOnboardingOpen(true)}
+        reviewCount={reviewQueueChats.length}
         platformStatus={platformStatus}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Banner Notice */}
-        {bannerNotice && (
-          <div
-            className={`p-3.5 rounded-xl border flex items-center justify-between text-xs animate-in fade-in duration-200 ${
-              bannerNotice.type === 'success'
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                : bannerNotice.type === 'error'
-                ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
-                : 'bg-blue-500/10 border-blue-500/20 text-blue-300'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              {bannerNotice.type === 'success' ? (
-                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-              ) : bannerNotice.type === 'error' ? (
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              ) : (
-                <Info className="w-4 h-4 text-blue-400 shrink-0" />
-              )}
-              <span>{bannerNotice.message}</span>
-            </div>
-            <button
-              onClick={() => setBannerNotice(null)}
-              className="text-slate-400 hover:text-white p-1 rounded"
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopBar
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          onTriggerScan={() => handleTriggerScan()}
+          isScanning={isScanning}
+          reviewCount={reviewQueueChats.length}
+        />
+
+        <main className="mx-auto w-full max-w-7xl flex-1 px-6 lg:px-10 py-8 space-y-8">
+          <p className="-mt-2 text-[15px] text-fg-muted">{currentNav.description}</p>
+
+          {bannerNotice && (
+            <div
+              role="status"
+              className={`flex items-start gap-3 rounded-xl px-4 py-3.5 text-[15px] animate-fade-in ${
+                bannerNotice.type === 'success'
+                  ? 'bg-accent-soft text-accent-text'
+                  : bannerNotice.type === 'error'
+                  ? 'bg-danger-soft text-danger-text'
+                  : 'bg-info-soft text-info-text'
+              }`}
             >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Tab 1: Dashboard Overview */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard
-                title="Total Discovered"
-                value={chats.length}
-                subtitle="All tracked AI conversations"
-                icon={<MessageSquare className="w-5 h-5 text-brand-400" />}
-                accentColor="brand"
-                onClick={() => setActiveTab('manager')}
-              />
-              <StatCard
-                title="Cleanup Candidates"
-                value={cleanupCandidatesCount}
-                subtitle="Low-value, empty, or test chats"
-                icon={<Trash2 className="w-5 h-5 text-rose-400" />}
-                accentColor="rose"
-                onClick={() => {
-                  setSelectedCategory('cleanup');
-                  setActiveTab('manager');
-                }}
-              />
-              <StatCard
-                title="Awaiting Review"
-                value={reviewCount}
-                subtitle="Flagged for manual inspection"
-                icon={<HelpCircle className="w-5 h-5 text-amber-400" />}
-                accentColor="amber"
-                onClick={() => setActiveTab('review')}
-              />
-              <StatCard
-                title="Protected Chats"
-                value={protectedCount}
-                subtitle="Immune from deletion"
-                icon={<Shield className="w-5 h-5 text-emerald-400" />}
-                accentColor="brand"
-                onClick={() => {
-                  setProtectedOnly(true);
-                  setActiveTab('manager');
-                }}
-              />
-            </div>
-
-            {/* Platform Connections Grid */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-brand-400" />
-                  Supported Chat Platforms
-                </h4>
-                <span className="text-xs text-slate-400">
-                  Open platform tabs to scan & discover chats
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <PlatformStatusCard
-                  platform="chatgpt"
-                  name="ChatGPT"
-                  url="https://chatgpt.com"
-                  connected={platformStatus.chatgpt.connected}
-                  totalDiscovered={chats.filter((c) => c.platform === 'chatgpt').length}
-                  lastScanTimestamp={platformStatus.chatgpt.lastScanTimestamp}
-                  onScan={(p) => handleTriggerScan(p)}
-                  isScanning={isScanning}
-                />
-                <PlatformStatusCard
-                  platform="gemini"
-                  name="Google Gemini"
-                  url="https://gemini.google.com"
-                  connected={platformStatus.gemini.connected}
-                  totalDiscovered={chats.filter((c) => c.platform === 'gemini').length}
-                  lastScanTimestamp={platformStatus.gemini.lastScanTimestamp}
-                  onScan={(p) => handleTriggerScan(p)}
-                  isScanning={isScanning}
-                />
-                <PlatformStatusCard
-                  platform="claude"
-                  name="Anthropic Claude"
-                  url="https://claude.ai"
-                  connected={platformStatus.claude.connected}
-                  totalDiscovered={chats.filter((c) => c.platform === 'claude').length}
-                  lastScanTimestamp={platformStatus.claude.lastScanTimestamp}
-                  onScan={(p) => handleTriggerScan(p)}
-                  isScanning={isScanning}
-                />
-              </div>
-            </div>
-
-            {/* Audit & Operation Trail */}
-            <RecentActivity logs={logs} />
-          </div>
-        )}
-
-        {/* Tab 2: Conversation Manager */}
-        {activeTab === 'manager' && (
-          <div className="space-y-4">
-            <FilterBar
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              selectedPlatform={selectedPlatform}
-              onPlatformChange={setSelectedPlatform}
-              selectedCategory={selectedCategory}
-              onCategoryChange={setSelectedCategory}
-              sortBy={sortBy}
-              onSortChange={setSortBy}
-              protectedOnly={protectedOnly}
-              onToggleProtectedOnly={() => setProtectedOnly((p) => !p)}
-            />
-
-            <ConversationTable
-              chats={filteredChats}
-              selectedIds={selectedIds}
-              onToggleSelect={handleToggleSelect}
-              onSelectAll={handleSelectAll}
-              onDeselectAll={handleDeselectAll}
-              onToggleProtection={handleToggleProtection}
-              onChangeCategory={handleChangeCategory}
-              onSingleDelete={handleSingleDelete}
-            />
-
-            <BulkActionBar
-              selectedCount={selectedIds.length}
-              onClearSelection={handleDeselectAll}
-              onTriggerDryRun={handleTriggerDryRun}
-              onTriggerArchive={handleTriggerBulkArchive}
-              onTriggerDelete={handleTriggerBulkDelete}
-              supportsArchive={selectedPlatform === 'chatgpt'}
-              isProcessing={isBatchProcessing}
-            />
-          </div>
-        )}
-
-        {/* Tab 3: Review Queue */}
-        {activeTab === 'review' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <div>
-                <h4 className="text-base font-semibold text-white">Review Queue</h4>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Inspect flagged conversations, understand why they were categorized, and make decisions.
-                </p>
-              </div>
-              <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-slate-800 text-slate-300">
-                {reviewQueueChats.length} items to review
-              </span>
-            </div>
-
-            {reviewQueueChats.length === 0 ? (
-              <div className="p-12 text-center rounded-2xl border border-slate-800 bg-slate-900/40">
-                <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                <h5 className="font-semibold text-sm text-white">Review Queue is Clean!</h5>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                  No conversations are currently flagged for review or cleanup. Run a new scan whenever you wish.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {reviewQueueChats.map((chat) => (
-                  <ReviewCard
-                    key={chat.id}
-                    chat={chat}
-                    onKeep={(id) => handleChangeCategory(id, 'keep')}
-                    onDismiss={handleDismiss}
-                    onMarkCleanup={(id) => handleChangeCategory(id, 'cleanup')}
-                    onToggleProtect={handleToggleProtection}
-                    onDeleteSingle={handleSingleDelete}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab 4: Settings */}
-        {activeTab === 'settings' && (
-          <div className="space-y-6">
-            {/* Settings sub-tabs */}
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+              {bannerNotice.type === 'success' ? (
+                <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+              ) : bannerNotice.type === 'error' ? (
+                <AlertCircle className="mt-0.5 size-5 shrink-0" />
+              ) : (
+                <Info className="mt-0.5 size-5 shrink-0" />
+              )}
+              <span className="flex-1">{bannerNotice.message}</span>
               <button
-                onClick={() => setSettingsSection('general')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  settingsSection === 'general'
-                    ? 'bg-slate-800 text-brand-400 border border-slate-700'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
+                type="button"
+                onClick={() => setBannerNotice(null)}
+                aria-label="Dismiss notice"
+                className="-m-1 rounded-md p-1 opacity-70 hover:opacity-100"
               >
-                Safety & General
-              </button>
-              <button
-                onClick={() => setSettingsSection('exclusions')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  settingsSection === 'exclusions'
-                    ? 'bg-slate-800 text-brand-400 border border-slate-700'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Protected Exclusions
-              </button>
-              <button
-                onClick={() => setSettingsSection('data')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  settingsSection === 'data'
-                    ? 'bg-slate-800 text-brand-400 border border-slate-700'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Privacy & Data
+                <X className="size-5" />
               </button>
             </div>
+          )}
 
-            {settingsSection === 'general' && (
-              <GeneralSettings settings={settings} onUpdate={handleUpdateSettings} />
-            )}
-            {settingsSection === 'exclusions' && (
-              <ExclusionsManager settings={settings} onUpdate={handleUpdateSettings} />
-            )}
-            {settingsSection === 'data' && (
-              <DataManagement
-                settings={settings}
-                onUpdate={handleUpdateSettings}
-                onDataReset={loadData}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-10">
+              <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+                <StatCard
+                  title="Conversations tracked"
+                  value={chats.length}
+                  subtitle="Across all platforms"
+                  icon={<MessageSquare />}
+                  accentColor="brand"
+                  onClick={() => setActiveTab('manager')}
+                />
+                <StatCard
+                  title="Cleanup candidates"
+                  value={cleanupCandidatesCount}
+                  subtitle="Empty, test or low-value chats"
+                  icon={<Trash2 />}
+                  accentColor="rose"
+                  onClick={() => {
+                    setSelectedCategory('cleanup');
+                    setActiveTab('manager');
+                  }}
+                />
+                <StatCard
+                  title="Needs review"
+                  value={reviewCount}
+                  subtitle="Flagged for a manual look"
+                  icon={<HelpCircle />}
+                  accentColor="amber"
+                  onClick={() => setActiveTab('review')}
+                />
+                <StatCard
+                  title="Protected"
+                  value={protectedCount}
+                  subtitle="Never deleted"
+                  icon={<Shield />}
+                  accentColor="blue"
+                  onClick={() => {
+                    setProtectedOnly(true);
+                    setActiveTab('manager');
+                  }}
+                />
+              </section>
+
+              <section>
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold">Platforms</h2>
+                  <p className="text-sm text-fg-muted">Keep the site open in a tab, then scan it.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {(Object.keys(PLATFORM_META) as PlatformId[]).map((p) => (
+                    <PlatformStatusCard
+                      key={p}
+                      platform={p}
+                      name={PLATFORM_META[p].name}
+                      url={PLATFORM_META[p].url}
+                      connected={platformStatus[p].connected}
+                      totalDiscovered={chats.filter((c) => c.platform === p).length}
+                      lastScanTimestamp={platformStatus[p].lastScanTimestamp}
+                      onScan={(target) => handleTriggerScan(target)}
+                      isScanning={isScanning}
+                    />
+                  ))}
+                </div>
+              </section>
+
+              <RecentActivity logs={logs} />
+            </div>
+          )}
+
+          {activeTab === 'manager' && (
+            <div className="space-y-5">
+              <FilterBar
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                selectedPlatform={selectedPlatform}
+                onPlatformChange={setSelectedPlatform}
+                selectedCategory={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                protectedOnly={protectedOnly}
+                onToggleProtectedOnly={() => setProtectedOnly((p) => !p)}
               />
-            )}
-          </div>
-        )}
-      </main>
 
-      {/* Confirmation Dialog */}
+              <ConversationTable
+                chats={filteredChats}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
+                onSelectAll={handleSelectAll}
+                onDeselectAll={handleDeselectAll}
+                onToggleProtection={handleToggleProtection}
+                onChangeCategory={handleChangeCategory}
+                onSingleDelete={handleSingleDelete}
+              />
+
+              <BulkActionBar
+                selectedCount={selectedIds.length}
+                onClearSelection={handleDeselectAll}
+                onTriggerDryRun={handleTriggerDryRun}
+                onTriggerArchive={handleTriggerBulkArchive}
+                onTriggerDelete={handleTriggerBulkDelete}
+                supportsArchive={selectedPlatform === 'chatgpt'}
+                isProcessing={isBatchProcessing}
+              />
+            </div>
+          )}
+
+          {activeTab === 'review' && (
+            <div className="space-y-5">
+              <h2 className="text-lg font-semibold">
+                {reviewQueueChats.length} conversation{reviewQueueChats.length === 1 ? '' : 's'} to review
+              </h2>
+
+              {reviewQueueChats.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border-strong bg-surface px-6 py-16 text-center">
+                  <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-accent-soft text-accent-text">
+                    <CheckCircle2 className="size-6" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold">You're all caught up</h3>
+                  <p className="mx-auto mt-1 max-w-md text-[15px] text-fg-muted">
+                    Nothing is flagged right now. Run a new scan whenever you want to check again.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                  {reviewQueueChats.map((chat) => (
+                    <ReviewCard
+                      key={chat.id}
+                      chat={chat}
+                      onKeep={(id) => handleChangeCategory(id, 'keep')}
+                      onDismiss={handleDismiss}
+                      onMarkCleanup={(id) => handleChangeCategory(id, 'cleanup')}
+                      onToggleProtect={handleToggleProtection}
+                      onDeleteSingle={handleSingleDelete}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="space-y-6">
+              <div role="tablist" aria-label="Settings sections" className="flex gap-1 overflow-x-auto border-b border-border">
+                {SETTINGS_SECTIONS.map(({ id, label }) => {
+                  const active = settingsSection === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setSettingsSection(id)}
+                      className={`-mb-px whitespace-nowrap border-b-2 px-4 h-11 text-[15px] font-medium transition-colors ${
+                        active
+                          ? 'border-accent text-fg'
+                          : 'border-transparent text-fg-muted hover:text-fg hover:border-border-strong'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="max-w-3xl">
+                {settingsSection === 'general' && (
+                  <GeneralSettings settings={settings} onUpdate={handleUpdateSettings} />
+                )}
+                {settingsSection === 'exclusions' && (
+                  <ExclusionsManager settings={settings} onUpdate={handleUpdateSettings} />
+                )}
+                {settingsSection === 'data' && (
+                  <DataManagement settings={settings} onUpdate={handleUpdateSettings} onDataReset={loadData} />
+                )}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
       <ConfirmationDialog
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
@@ -631,7 +631,6 @@ export const App: React.FC = () => {
         onCancelBatch={handleCancelBatch}
       />
 
-      {/* Onboarding Safety Modal */}
       <OnboardingModal isOpen={onboardingOpen} onClose={handleCloseOnboarding} />
     </div>
   );

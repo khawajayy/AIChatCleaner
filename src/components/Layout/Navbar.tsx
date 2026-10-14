@@ -1,159 +1,180 @@
 import React from 'react';
 import {
-  Sparkles,
+  LayoutDashboard,
+  MessagesSquare,
+  ListChecks,
+  Settings as SettingsIcon,
   ShieldCheck,
   ShieldAlert,
-  Sun,
-  Moon,
   HelpCircle,
   RefreshCw,
 } from 'lucide-react';
 import { Button } from '../Common/Button';
-import { Badge } from '../Common/Badge';
-import { useTheme } from './ThemeProvider';
+import { BrandLogo } from '../Common/BrandLogo';
+import { ThemeToggle } from '../Common/ThemeToggle';
+import { PLATFORM_META } from '../Common/PlatformMark';
 import { UserSettings, PlatformId } from '../../types';
 
-interface NavbarProps {
+export type DashboardTab = 'dashboard' | 'manager' | 'review' | 'settings';
+
+export const NAV_ITEMS: { id: DashboardTab; label: string; description: string; Icon: typeof LayoutDashboard }[] = [
+  { id: 'dashboard', label: 'Overview', description: 'Scan status and recent activity across your AI chat platforms.', Icon: LayoutDashboard },
+  { id: 'manager', label: 'Conversations', description: 'Search, filter and act on every conversation ChatSweep has found.', Icon: MessagesSquare },
+  { id: 'review', label: 'Review queue', description: 'Conversations flagged for cleanup or a second look.', Icon: ListChecks },
+  { id: 'settings', label: 'Settings', description: 'Safety limits, protection rules and your local data.', Icon: SettingsIcon },
+];
+
+interface SidebarProps {
   settings: UserSettings;
-  activeTab: string;
-  onSelectTab: (tab: string) => void;
-  onTriggerScan: () => void;
-  isScanning: boolean;
+  activeTab: DashboardTab;
+  onSelectTab: (tab: DashboardTab) => void;
   onOpenOnboarding: () => void;
+  reviewCount: number;
   platformStatus: Record<PlatformId, { connected: boolean; totalDiscovered: number }>;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({
+const version = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '';
+
+export const Sidebar: React.FC<SidebarProps> = ({
   settings,
   activeTab,
   onSelectTab,
-  onTriggerScan,
-  isScanning,
   onOpenOnboarding,
+  reviewCount,
   platformStatus,
 }) => {
-  const { theme, toggleTheme } = useTheme();
-
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'manager', label: 'Conversation Manager' },
-    { id: 'review', label: 'Review Queue' },
-    { id: 'settings', label: 'Settings' },
-  ];
-
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-slate-900/80 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand */}
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center text-slate-950 shadow-glow">
-              <Sparkles className="w-5 h-5 fill-slate-950" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-base tracking-tight text-white">ChatSweep</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">
-                  v1.0 MVP
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">Safe Multi-Platform AI Chat Cleaner</p>
-            </div>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 ml-4">
-            {navItems.map((item) => {
-              const active = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onSelectTab(item.id)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                    active
-                      ? 'bg-slate-800 text-brand-400 border border-slate-700/60 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-3">
-          {/* Dry Run / Safety Indicator */}
-          {settings.dryRunDefault ? (
-            <Badge variant="green" size="md" className="hidden sm:inline-flex">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Dry-Run Active (Safe)</span>
-            </Badge>
-          ) : (
-            <Badge variant="amber" size="md" className="hidden sm:inline-flex">
-              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-              <span>Live Deletion Mode</span>
-            </Badge>
-          )}
-
-          {/* Platform status pills */}
-          <div className="hidden lg:flex items-center gap-1.5 text-xs border-r border-slate-800 pr-3 mr-1">
-            <span
-              title={`ChatGPT: ${platformStatus.chatgpt.connected ? 'Active' : 'Standby'}`}
-              className={`w-2 h-2 rounded-full ${
-                platformStatus.chatgpt.connected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'
-              }`}
-            />
-            <span className="text-slate-400 text-[11px]">ChatGPT</span>
-
-            <span
-              title={`Gemini: ${platformStatus.gemini.connected ? 'Active' : 'Standby'}`}
-              className={`w-2 h-2 rounded-full ml-1.5 ${
-                platformStatus.gemini.connected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'
-              }`}
-            />
-            <span className="text-slate-400 text-[11px]">Gemini</span>
-
-            <span
-              title={`Claude: ${platformStatus.claude.connected ? 'Active' : 'Standby'}`}
-              className={`w-2 h-2 rounded-full ml-1.5 ${
-                platformStatus.claude.connected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'
-              }`}
-            />
-            <span className="text-slate-400 text-[11px]">Claude</span>
-          </div>
-
-          {/* Scan Action */}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onTriggerScan}
-            isLoading={isScanning}
-            icon={<RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />}
-          >
-            {isScanning ? 'Scanning...' : 'Scan Chats'}
-          </Button>
-
-          {/* Onboarding info */}
-          <button
-            onClick={onOpenOnboarding}
-            title="Safety Guide & Documentation"
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-          >
-            <HelpCircle className="w-4 h-4" />
-          </button>
-
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            title="Toggle theme"
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
+    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-border bg-surface h-screen sticky top-0">
+      <div className="flex items-center gap-3 px-5 h-16 border-b border-border">
+        <BrandLogo size="sm" />
+        <div className="leading-tight">
+          <p className="text-base font-semibold">ChatSweep</p>
+          <p className="text-xs text-fg-subtle">AI chat cleaner{version && ` · v${version}`}</p>
         </div>
       </div>
+
+      <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        {NAV_ITEMS.map(({ id, label, Icon }) => {
+          const active = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onSelectTab(id)}
+              aria-current={active ? 'page' : undefined}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 h-10 text-[15px] font-medium transition-colors ${
+                active ? 'bg-accent-soft text-accent-text' : 'text-fg-muted hover:bg-surface-2 hover:text-fg'
+              }`}
+            >
+              <Icon className="size-[18px] shrink-0" />
+              <span className="flex-1 text-left">{label}</span>
+              {id === 'review' && reviewCount > 0 && (
+                <span className="min-w-6 rounded-full bg-warning-soft px-1.5 text-center text-xs font-semibold leading-5 text-warning-text tabular-nums">
+                  {reviewCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
+
+        <div className="pt-6">
+          <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wide text-fg-subtle">Platforms</p>
+          {(Object.keys(PLATFORM_META) as PlatformId[]).map((p) => {
+            const connected = platformStatus[p].connected;
+            return (
+              <div key={p} className="flex items-center gap-3 px-3 h-9 text-sm text-fg-muted">
+                <span
+                  className={`size-2 rounded-full ${connected ? 'bg-accent' : 'bg-border-strong'}`}
+                  aria-hidden="true"
+                />
+                <span className="flex-1">{PLATFORM_META[p].shortName}</span>
+                <span className="text-xs text-fg-subtle">{connected ? 'Scanned' : 'Not scanned'}</span>
+              </div>
+            );
+          })}
+        </div>
+      </nav>
+
+      <div className="border-t border-border p-3 space-y-2">
+        <button
+          type="button"
+          onClick={() => onSelectTab('settings')}
+          className={`flex w-full items-start gap-3 rounded-lg p-3 text-left transition-colors ${
+            settings.dryRunDefault ? 'bg-accent-soft hover:brightness-95' : 'bg-warning-soft hover:brightness-95'
+          }`}
+        >
+          {settings.dryRunDefault ? (
+            <ShieldCheck className="mt-0.5 size-5 shrink-0 text-accent-text" />
+          ) : (
+            <ShieldAlert className="mt-0.5 size-5 shrink-0 text-warning-text" />
+          )}
+          <div>
+            <p className={`text-sm font-semibold ${settings.dryRunDefault ? 'text-accent-text' : 'text-warning-text'}`}>
+              {settings.dryRunDefault ? 'Dry-run is on' : 'Live mode'}
+            </p>
+            <p className="text-xs text-fg-muted">
+              {settings.dryRunDefault ? 'Nothing will be deleted.' : 'Deletions are permanent.'}
+            </p>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={onOpenOnboarding}
+          className="flex w-full items-center gap-3 rounded-lg px-3 h-10 text-sm font-medium text-fg-muted hover:bg-surface-2 hover:text-fg transition-colors"
+        >
+          <HelpCircle className="size-[18px]" />
+          How ChatSweep works
+        </button>
+      </div>
+    </aside>
+  );
+};
+
+interface TopBarProps {
+  activeTab: DashboardTab;
+  onSelectTab: (tab: DashboardTab) => void;
+  onTriggerScan: () => void;
+  isScanning: boolean;
+  reviewCount: number;
+}
+
+export const TopBar: React.FC<TopBarProps> = ({ activeTab, onSelectTab, onTriggerScan, isScanning, reviewCount }) => {
+  const current = NAV_ITEMS.find((n) => n.id === activeTab) ?? NAV_ITEMS[0];
+  return (
+    <header className="sticky top-0 z-30 border-b border-border bg-canvas/85 backdrop-blur-md">
+      <div className="flex items-center gap-4 px-6 lg:px-10 h-16">
+        <div className="flex items-center gap-3 lg:hidden">
+          <BrandLogo size="sm" />
+        </div>
+        <h1 className="text-xl font-semibold tracking-tight">{current.label}</h1>
+        <div className="ml-auto flex items-center gap-3">
+          <ThemeToggle />
+          <Button variant="primary" size="md" onClick={onTriggerScan} isLoading={isScanning} icon={<RefreshCw />}>
+            {isScanning ? 'Scanning…' : 'Scan chats'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Compact navigation below the lg breakpoint, where the sidebar is hidden */}
+      <nav aria-label="Main" className="lg:hidden flex gap-1 overflow-x-auto px-4 pb-2">
+        {NAV_ITEMS.map(({ id, label }) => {
+          const active = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onSelectTab(id)}
+              aria-current={active ? 'page' : undefined}
+              className={`whitespace-nowrap rounded-lg px-3 h-9 text-sm font-medium transition-colors ${
+                active ? 'bg-accent-soft text-accent-text' : 'text-fg-muted hover:bg-surface-2 hover:text-fg'
+              }`}
+            >
+              {label}
+              {id === 'review' && reviewCount > 0 && ` (${reviewCount})`}
+            </button>
+          );
+        })}
+      </nav>
     </header>
   );
 };
