@@ -35,6 +35,11 @@ import {
   X,
 } from 'lucide-react';
 
+function tabFromHash(): DashboardTab {
+  const hash = window.location.hash.slice(1);
+  return NAV_ITEMS.some((n) => n.id === hash) ? (hash as DashboardTab) : 'dashboard';
+}
+
 const SETTINGS_SECTIONS = [
   { id: 'general', label: 'Safety & general' },
   { id: 'exclusions', label: 'Protection rules' },
@@ -46,7 +51,17 @@ export const App: React.FC = () => {
   const [chats, setChats] = useState<ChatMetadata[]>([]);
   const [logs, setLogs] = useState<OperationLog[]>([]);
   const [platformStatus, setPlatformStatus] = useState(INITIAL_STORAGE_STATE.platformStatus);
-  const [activeTab, setActiveTab] = useState<DashboardTab>('dashboard');
+  // The current page lives in the URL hash so pages can be linked to and Back works.
+  const [activeTab, setActiveTabState] = useState<DashboardTab>(tabFromHash);
+  const setActiveTab = (tab: DashboardTab) => {
+    setActiveTabState(tab);
+    if (window.location.hash !== `#${tab}`) window.location.hash = tab;
+  };
+  useEffect(() => {
+    const onHashChange = () => setActiveTabState(tabFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const [isScanning, setIsScanning] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -441,7 +456,7 @@ export const App: React.FC = () => {
             <div className="space-y-10">
               <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
                 <StatCard
-                  title="Conversations tracked"
+                  title="Total chats"
                   value={chats.length}
                   subtitle="Across all platforms"
                   icon={<MessageSquare />}
@@ -449,9 +464,9 @@ export const App: React.FC = () => {
                   onClick={() => setActiveTab('manager')}
                 />
                 <StatCard
-                  title="Cleanup candidates"
+                  title="To clean up"
                   value={cleanupCandidatesCount}
-                  subtitle="Empty, test or low-value chats"
+                  subtitle="Empty or throwaway chats"
                   icon={<Trash2 />}
                   accentColor="rose"
                   onClick={() => {
@@ -610,7 +625,7 @@ export const App: React.FC = () => {
                   <ExclusionsManager settings={settings} onUpdate={handleUpdateSettings} />
                 )}
                 {settingsSection === 'data' && (
-                  <DataManagement settings={settings} onUpdate={handleUpdateSettings} onDataReset={loadData} />
+                  <DataManagement onDataReset={loadData} />
                 )}
               </div>
             </div>

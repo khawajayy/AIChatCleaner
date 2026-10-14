@@ -27,3 +27,6 @@ Thumbs.db
 # Editor directories
 .vscode/
 .idea/
+
+# Store upload zips (npm run package)
+release/

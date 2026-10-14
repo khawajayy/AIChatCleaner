@@ -1,0 +1,74 @@
+<!doctype html>
+<!-- Promo tiles. ?size=small (440x280) or ?size=marquee (1400x560, shows a screenshot). -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    html, body { margin: 0; overflow: hidden; }
+    body {
+      font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+      background: linear-gradient(135deg, #0c2a17 0%, #0c0e12 70%);
+      color: #eef1f5;
+    }
+    .tile { box-sizing: border-box; display: flex; align-items: center; }
+    .logo { display: inline-flex; align-items: center; justify-content: center; background: #22c55e; color: #03140a; }
+    .logo svg { fill: none; stroke: currentColor; stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; }
+    h1 { margin: 0; font-weight: 700; letter-spacing: -0.02em; }
+    p { margin: 0; color: #b0b8c4; }
+    .sites { display: flex; gap: 8px; }
+    .sites span { font-weight: 600; border-radius: 999px; background: rgb(255 255 255 / 0.08); color: #dfe4ea; }
+
+    .small { width: 440px; height: 280px; padding: 34px 36px; flex-direction: column; align-items: flex-start; justify-content: center; }
+    .small .logo { width: 52px; height: 52px; border-radius: 14px; }
+    .small .logo svg { width: 30px; height: 30px; }
+    .small h1 { font-size: 34px; margin-top: 18px; }
+    .small p { font-size: 17px; margin-top: 6px; }
+    .small .sites { margin-top: 18px; }
+    .small .sites span { font-size: 13px; padding: 5px 11px; }
+
+    .marquee { width: 1400px; height: 560px; padding: 0 0 0 96px; gap: 64px; }
+    .marquee .text { width: 470px; flex-shrink: 0; }
+    .marquee .logo { width: 64px; height: 64px; border-radius: 18px; }
+    .marquee .logo svg { width: 36px; height: 36px; }
+    .marquee h1 { font-size: 56px; margin-top: 24px; }
+    .marquee p { font-size: 22px; line-height: 1.5; margin-top: 12px; }
+    .marquee .sites { margin-top: 26px; }
+    .marquee .sites span { font-size: 15px; padding: 7px 14px; }
+    .marquee .shot {
+      width: 860px; height: 538px; margin-top: 70px; border-radius: 14px 0 0 0; overflow: hidden;
+      box-shadow: 0 30px 80px -10px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.08);
+    }
+    .marquee .shot img { width: 1280px; transform: scale(0.672); transform-origin: top left; display: block; }
+  </style>
+</head>
+<body>
+  <div id="tile" class="tile">
+    <div class="text">
+      <span class="logo">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m16 22-1-4" />
+          <path d="M19 14a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2h-3a1 1 0 0 1-1-1V4a2 2 0 0 0-4 0v5a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2v1a1 1 0 0 0 1 1" />
+          <path d="M19 14H5l-1.973 6.767A1 1 0 0 0 4 22h16a1 1 0 0 0 .973-1.233z" />
+          <path d="m8 22 1-4" />
+        </svg>
+      </span>
+      <h1>ChatSweep</h1>
+      <p id="tagline">Clear out throwaway AI chats</p>
+      <div class="sites"><span>ChatGPT</span><span>Gemini</span><span>Claude</span></div>
+    </div>
+  </div>
+  <script>
+    var size = new URLSearchParams(location.search).get('size') || 'small';
+    var tile = document.getElementById('tile');
+    tile.classList.add(size);
+    if (size === 'marquee') {
+      document.getElementById('tagline').textContent =
+        'Find the test prompts and abandoned chats cluttering your AI history, and delete them safely.';
+      var shot = document.createElement('div');
+      shot.className = 'shot';
+      shot.innerHTML = '<img src="/out/screenshot-2-conversations.png" alt="">';
+      tile.appendChild(shot);
+    }
+  </script>
+</body>
+</html>

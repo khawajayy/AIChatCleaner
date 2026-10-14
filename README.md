@@ -28,7 +28,7 @@ A privacy-first, safety-focused Chrome Extension (Manifest V3) that helps users 
 ## Installation & Development
 
 ### 1. Prerequisites
-- Node.js (v18+)
+- Node.js 22.2 or newer
 - Google Chrome or any Chromium-based browser
 
 ### 2. Build the Extension
@@ -42,7 +42,7 @@ This compiles the extension files into the `dist/` directory.
 1. Open Chrome and navigate to `chrome://extensions/`.
 2. Enable **Developer mode** using the toggle switch in the top-right corner.
 3. Click **Load unpacked**.
-4. Select the `dist/` folder inside this project directory (`c:/Projects/AI Chat Cleaner/dist`).
+4. Select the `dist/` folder inside this project.
 5. Pin **ChatSweep** from the Chrome extensions toolbar.
 
 ---
@@ -66,3 +66,22 @@ This compiles the extension files into the `dist/` directory.
   npm run build
   ```
   Bundles the popup, dashboard, background service worker, and content scripts.
+
+---
+
+## Publishing to the Chrome Web Store
+
+Everything for a submission is in [`store/LISTING.md`](store/LISTING.md): listing copy, permission justifications, privacy answers and which image goes where.
+
+1. Bump `version` in `package.json` and `public/manifest.json`.
+2. Build the upload zip:
+   ```bash
+   npm run package
+   ```
+   This writes `release/chatsweep-<version>.zip` with `manifest.json` at the root, and fails if the manifest points at a missing file.
+3. Regenerate store screenshots and promo tiles if the UI changed:
+   ```bash
+   npm run store:assets
+   ```
+   Images go to `store/assets/`. They use made-up sample data and need Chrome installed (set `CHROME_PATH` if it isn't found).
+4. The privacy policy is `docs/privacy-policy.html`. Turn on GitHub Pages (Settings → Pages → deploy from `main` / `docs`) to publish it at https://khawajayy.github.io/AIChatCleaner/privacy-policy.html.

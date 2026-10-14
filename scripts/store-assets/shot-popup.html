@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- Two real popups (light and dark) on a 1280x800 canvas. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <script src="/store/demo-data.js"></script>
+  <script>seedChatSweepDemo('light');</script>
+  <style>
+    html, body { margin: 0; width: 1280px; height: 800px; overflow: hidden; }
+    body {
+      font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 20% 0%, #e6f4ea 0%, #f5f6f8 55%);
+      color: #0e1217; display: flex; align-items: center; justify-content: center; gap: 64px;
+    }
+    .copy { width: 300px; }
+    h1 { font-size: 36px; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 16px; }
+    p { font-size: 19px; line-height: 1.55; color: #474f5c; margin: 0; }
+    .frames { display: flex; gap: 24px; }
+    iframe {
+      border: 0; width: 400px; height: 520px; border-radius: 14px; display: block;
+      box-shadow: 0 24px 60px -16px rgb(16 24 40 / 0.35), 0 0 0 1px rgb(16 24 40 / 0.08);
+    }
+    .frames iframe:last-child { margin-top: 72px; }
+  </style>
+</head>
+<body>
+  <div class="copy">
+    <h1>Scan right from the chat you're on</h1>
+    <p>Open the popup on ChatGPT, Gemini or Claude, hit Scan, and see what's worth cleaning up. Dry run stays on until you turn it off.</p>
+  </div>
+  <div class="frames">
+    <iframe src="/popup-demo.html?site=chatgpt&theme=light"></iframe>
+    <iframe src="/popup-demo.html?site=claude&theme=dark"></iframe>
+  </div>
+</body>
+</html>
