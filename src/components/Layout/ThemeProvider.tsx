@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { StorageManager, STORAGE_KEY } from '../../storage/storage-manager';
+import { StorageClient } from '../../storage/storage-client';
 import { UserSettings } from '../../types';
 
 export type ThemePreference = UserSettings['theme'];
@@ -97,7 +98,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setPreference = useCallback((pref: ThemePreference) => {
     setPreferenceState(pref);
-    StorageManager.updateSettings({ theme: pref });
+    StorageClient.updateSettings({ theme: pref }).catch((err) => console.warn('Theme could not be saved:', err));
   }, []);
 
   const toggleTheme = useCallback(() => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StorageManager } from '../storage/storage-manager';
+import { StorageClient, onStorageChanged } from '../storage/storage-client';
 import { UserSettings, PlatformId, ChatMetadata } from '../types';
 import { DEFAULT_SETTINGS } from '../storage/schema';
 import { Button } from '../components/Common/Button';
@@ -40,11 +41,14 @@ export const PopupApp: React.FC = () => {
         setActivePlatform(detectPlatformFromUrl(tab?.url));
       });
     }
+    return onStorageChanged(() => {
+      refreshCounts();
+    });
   }, []);
 
   const handleToggleDryRun = async (next: boolean) => {
     setSettings((prev) => ({ ...prev, dryRunDefault: next }));
-    await StorageManager.updateSettings({ dryRunDefault: next });
+    await StorageClient.updateSettings({ dryRunDefault: next });
   };
 
   const handleScanCurrent = async () => {

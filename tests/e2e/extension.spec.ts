@@ -156,12 +156,7 @@ test('a chat protected while its batch is running is not deleted', async () => {
   const batch = send({ type: 'EXECUTE_BATCH', chatIds: ['c-2', 'c-11', 'c-12'], action: 'delete', dryRun: false });
   // c-12 runs last (~2.4s in, with the 1.2s default delay); protect it during the first action
   await dash.waitForTimeout(600);
-  await dash.evaluate(async (k) => {
-    const s = (await chrome.storage.local.get(k))[k] as any;
-    s.chats['c-12'].isProtected = true;
-    s.settings.protectedChatIds.push('c-12');
-    await chrome.storage.local.set({ [k]: s });
-  }, STORAGE_KEY);
+  expect((await send({ type: 'SET_CHAT_PROTECTION', chatId: 'c-12', isProtected: true })).success).toBe(true);
 
   const res = await batch;
   expect(res.results.map((r: any) => [r.chatId, r.success])).toEqual([
@@ -171,6 +166,21 @@ test('a chat protected while its batch is running is not deleted', async () => {
   ]);
   expect(await sidebarHas('c-12')).toBe(true);
   expect((await readState()).chats['c-12'].isProtected).toBe(true);
+});
+
+test('settings changes during a batch keep its results', async () => {
+  const batch = send({ type: 'EXECUTE_BATCH', chatIds: ['c-13'], action: 'delete', dryRun: false });
+  await dash.waitForTimeout(100);
+  // The worker reclassifies the stored chats, so the batch's status is not overwritten by a stale copy
+  const settings = await send({ type: 'UPDATE_SETTINGS', payload: { confidenceThreshold: 0.9 }, reclassify: true });
+  expect(settings.confidenceThreshold).toBe(0.9);
+  expect((await batch).results[0]).toMatchObject({ success: true });
+
+  const state = await readState();
+  expect(state.settings.confidenceThreshold).toBe(0.9);
+  expect(state.chats['c-13'].status).toBe('deleted');
+  expect(state.chats['c-1'].status).toBe('deleted');
+  expect(state.chats['c-12'].isProtected).toBe(true);
 });
 
 test('unknown messages are rejected', async () => {
