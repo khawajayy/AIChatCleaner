@@ -14,7 +14,7 @@ import { DataManagement } from '../components/Settings/DataManagement';
 import { OnboardingModal } from '../components/Onboarding/OnboardingModal';
 import { PLATFORM_META } from '../components/Common/PlatformMark';
 import { StorageManager } from '../storage/storage-manager';
-import { ClassificationEngine } from '../classifier/engine';
+import { StorageClient, onStorageChanged } from '../storage/storage-client';
 import {
   ChatMetadata,
   UserSettings,
@@ -100,23 +100,28 @@ export const App: React.FC = () => {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<'general' | 'exclusions' | 'data'>('general');
 
-  // Load initial data
+  // Read the stored state. Writes go through the background worker (StorageClient)
+  // and come back here via the storage change listener.
   const loadData = async () => {
     const state = await StorageManager.getState();
     setSettings(state.settings);
     setChats(Object.values(state.chats));
     setLogs(state.operationLogs);
     setPlatformStatus(state.platformStatus);
-
-    // Check if onboarding is needed
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('onboarding') === 'true' || !state.settings.onboardingCompleted) {
-      setOnboardingOpen(true);
-    }
+    return state;
   };
 
   useEffect(() => {
-    loadData();
+    loadData().then((state) => {
+      // Check if onboarding is needed
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('onboarding') === 'true' || !state.settings.onboardingCompleted) {
+        setOnboardingOpen(true);
+      }
+    });
+    const unsubscribeStorage = onStorageChanged(() => {
+      loadData();
+    });
 
     // Listen for background batch messages
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
@@ -133,18 +138,20 @@ export const App: React.FC = () => {
         }
       };
       chrome.runtime.onMessage.addListener(listener);
-      return () => chrome.runtime.onMessage.removeListener(listener);
+      return () => {
+        chrome.runtime.onMessage.removeListener(listener);
+        unsubscribeStorage();
+      };
     }
+    return unsubscribeStorage;
   }, []);
 
   const handleUpdateSettings = async (partial: Partial<UserSettings>) => {
-    const updated = await StorageManager.updateSettings(partial);
+    setSettings((prev) => ({ ...prev, ...partial }));
+    // The worker re-evaluates the stored chats with the new thresholds/exclusions
+    const updated = await StorageClient.updateSettings(partial, { reclassify: true });
     setSettings(updated);
-
-    // Re-evaluate chats with new thresholds/exclusions
-    const reclassified = ClassificationEngine.classifyBatch(chats, updated);
-    await StorageManager.saveChats(reclassified);
-    setChats(reclassified);
+    await loadData();
   };
 
   const handleCloseOnboarding = async () => {
@@ -200,27 +207,16 @@ export const App: React.FC = () => {
     const chat = chats.find((c) => c.id === chatId);
     if (!chat) return;
 
-    const newProtected = !chat.isProtected;
-    const updated = await StorageManager.updateChat(chatId, {
-      isProtected: newProtected,
-      category: newProtected ? 'keep' : chat.category,
-    });
-
+    // Set the state the user sees flipped, rather than toggling whatever storage holds
+    const updated = await StorageClient.setChatProtection(chatId, !chat.isProtected);
     if (updated) {
       setChats((prev) => prev.map((c) => (c.id === chatId ? updated : c)));
-      // Also update settings.protectedChatIds
-      let ids = [...settings.protectedChatIds];
-      if (newProtected) ids.push(chatId);
-      else ids = ids.filter((id) => id !== chatId);
-      await StorageManager.updateSettings({ protectedChatIds: ids });
+      await loadData();
     }
   };
 
   const handleChangeCategory = async (chatId: string, category: ClassificationCategory) => {
-    const updated = await StorageManager.updateChat(chatId, {
-      category,
-      userOverrideCategory: category,
-    });
+    const updated = await StorageClient.setChatCategory(chatId, category);
     if (updated) {
       setChats((prev) => prev.map((c) => (c.id === chatId ? updated : c)));
     }

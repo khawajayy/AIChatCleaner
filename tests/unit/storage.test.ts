@@ -3,6 +3,26 @@ import { StorageManager } from '../../src/storage/storage-manager';
 import { resetMockStorage } from '../setup';
 import { ChatMetadata, OperationLog } from '../../src/types';
 
+const makeChat = (id: string, overrides: Partial<ChatMetadata> = {}): ChatMetadata => ({
+  id,
+  platform: 'chatgpt',
+  title: `Chat ${id}`,
+  url: `https://chatgpt.com/c/${id}`,
+  lastActivityTimestamp: null,
+  messageCount: null,
+  isEmpty: false,
+  isUnfinished: false,
+  category: 'cleanup',
+  confidence: 0.8,
+  reasons: [],
+  lastScannedAt: Date.now(),
+  supportsArchive: true,
+  supportsDelete: true,
+  status: 'discovered',
+  isProtected: false,
+  ...overrides,
+});
+
 describe('StorageManager & Schema Migration', () => {
   beforeEach(() => {
     resetMockStorage();
@@ -86,5 +106,84 @@ describe('StorageManager & Schema Migration', () => {
     await StorageManager.resetAllData();
     const chats = await StorageManager.getChats();
     expect(chats.length).toBe(0);
+  });
+
+  it('does not lose updates when writers interleave', async () => {
+    await StorageManager.saveChats([makeChat('a'), makeChat('b')]);
+
+    // Each of these reads the whole state and writes it back; without the write
+    // queue they all read the same snapshot and only the last one survives.
+    await Promise.all([
+      StorageManager.updateChat('a', { status: 'deleted' }),
+      StorageManager.setChatProtection('b', true),
+      StorageManager.updateSettings({ theme: 'dark' }),
+      StorageManager.appendOperationLog({
+        id: 'log-1',
+        batchId: 'batch-1',
+        timestamp: Date.now(),
+        platform: 'chatgpt',
+        chatId: 'a',
+        chatTitle: 'Chat a',
+        action: 'delete',
+        success: true,
+        verified: true,
+      }),
+      StorageManager.updatePlatformStatus('chatgpt', { totalDiscovered: 2 }),
+    ]);
+
+    const state = await StorageManager.getState();
+    expect(state.chats['a'].status).toBe('deleted');
+    expect(state.chats['b'].isProtected).toBe(true);
+    expect(state.settings.protectedChatIds).toEqual(['b']);
+    expect(state.settings.theme).toBe('dark');
+    expect(state.operationLogs.map((l) => l.id)).toEqual(['log-1']);
+    expect(state.platformStatus.chatgpt.totalDiscovered).toBe(2);
+  });
+
+  it('runs a slow mutation to completion before the next write reads state', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+
+    const slow = StorageManager.mutate(async (state) => {
+      await gate;
+      state.settings.protectedChatIds = ['kept'];
+    });
+    const fast = StorageManager.updateSettings({ maxBatchSize: 3 });
+    release();
+    await Promise.all([slow, fast]);
+
+    const settings = await StorageManager.getSettings();
+    expect(settings.protectedChatIds).toEqual(['kept']);
+    expect(settings.maxBatchSize).toBe(3);
+  });
+
+  it('keeps going after a failed mutation', async () => {
+    await expect(
+      StorageManager.mutate(() => {
+        throw new Error('boom');
+      })
+    ).rejects.toThrow('boom');
+    await StorageManager.updateSettings({ maxBatchSize: 4 });
+    expect((await StorageManager.getSettings()).maxBatchSize).toBe(4);
+  });
+
+  it('rescans keep status, protection and category overrides from storage', async () => {
+    await StorageManager.saveChats([makeChat('a'), makeChat('b'), makeChat('c')]);
+    await StorageManager.updateChat('a', { status: 'deleted' });
+    await StorageManager.setChatProtection('b', true);
+    await StorageManager.updateChat('c', { category: 'review', userOverrideCategory: 'review' });
+
+    await StorageManager.saveChats([
+      makeChat('a', { title: 'Renamed' }),
+      makeChat('b'),
+      makeChat('c'),
+      makeChat('d'),
+    ]);
+
+    const state = await StorageManager.getState();
+    expect(state.chats['a']).toMatchObject({ title: 'Renamed', status: 'deleted' });
+    expect(state.chats['b']).toMatchObject({ isProtected: true, category: 'keep' });
+    expect(state.chats['c']).toMatchObject({ category: 'review', userOverrideCategory: 'review' });
+    expect(state.chats['d']).toMatchObject({ status: 'discovered', category: 'cleanup' });
   });
 });

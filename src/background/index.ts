@@ -44,7 +44,17 @@ async function handleBackgroundMessage(message: ExtensionMessage, sender: chrome
     }
 
     case 'UPDATE_SETTINGS': {
-      return await StorageManager.updateSettings(message.payload);
+      const { payload, reclassify } = message;
+      // Reclassify the stored chats in the same write, so chats changed since the UI last read are not overwritten
+      return await StorageManager.mutate((state) => {
+        state.settings = { ...state.settings, ...payload };
+        if (reclassify) {
+          for (const chat of ClassificationEngine.classifyBatch(Object.values(state.chats), state.settings)) {
+            state.chats[chat.id] = chat;
+          }
+        }
+        return state.settings;
+      });
     }
 
     case 'RESET_STORAGE': {
@@ -105,30 +115,22 @@ async function handleBackgroundMessage(message: ExtensionMessage, sender: chrome
     case 'TOGGLE_CHAT_PROTECTION': {
       const chat = await StorageManager.getChatById(message.chatId);
       if (!chat) return { success: false, error: 'Chat not found' };
+      const updated = await StorageManager.setChatProtection(message.chatId, !chat.isProtected);
+      return { success: !!updated, chat: updated };
+    }
 
-      const newProtectedState = !chat.isProtected;
-      const updated = await StorageManager.updateChat(message.chatId, {
-        isProtected: newProtectedState,
-        category: newProtectedState ? 'keep' : chat.category,
-      });
-
-      // Update protectedChatIds list in settings as well
-      const settings = await StorageManager.getSettings();
-      let protectedIds = [...settings.protectedChatIds];
-      if (newProtectedState) {
-        if (!protectedIds.includes(message.chatId)) protectedIds.push(message.chatId);
-      } else {
-        protectedIds = protectedIds.filter((id) => id !== message.chatId);
-      }
-      await StorageManager.updateSettings({ protectedChatIds: protectedIds });
-
+    case 'SET_CHAT_PROTECTION': {
+      const updated = await StorageManager.setChatProtection(message.chatId, message.isProtected);
+      if (!updated) return { success: false, error: 'Chat not found' };
       return { success: true, chat: updated };
     }
 
     case 'EXECUTE_BATCH': {
       const settings = await StorageManager.getSettings();
       const allChats = await StorageManager.getChats();
-      const targetChats = allChats.filter((c) => message.chatIds.includes(c.id));
+      // Keep the user's selection order, not storage order
+      const byId = new Map(allChats.map((c) => [c.id, c]));
+      const targetChats = message.chatIds.flatMap((id) => byId.get(id) ?? []);
 
       // Actions run in each chat tab's content script; the dashboard tab is restored afterwards.
       const dispatcher = new TabActionDispatcher(sender.tab);

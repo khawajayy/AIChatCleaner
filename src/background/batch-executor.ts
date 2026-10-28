@@ -5,6 +5,7 @@ import {
   OperationLog,
 } from '../types';
 import { StorageManager } from '../storage/storage-manager';
+import { RuleUserProtection } from '../classifier/rules';
 
 /** Performs one action on one conversation inside its platform's page. */
 export type ActionDispatcher = (
@@ -82,8 +83,10 @@ export class SafeBatchExecutor {
 
         const chat = safeBatch[i];
 
-        // Safety Safeguard 3: Strict immunity for protected conversations
-        if (chat.isProtected || settings.protectedChatIds.includes(chat.id)) {
+        // Safety Safeguard 3: Strict immunity for protected conversations.
+        // Re-read storage right before acting: the user may have protected this chat,
+        // or added a matching keyword, after the batch started.
+        if (await this.isProtectedNow(chat, settings)) {
           const skipResult: ActionResult = {
             success: false,
             action: dryRun ? 'dry_run' : action,
@@ -215,5 +218,19 @@ export class SafeBatchExecutor {
       this.isRunning = false;
       this.isCancelled = false;
     }
+  }
+
+  private static async isProtectedNow(chat: ChatMetadata, batchSettings: UserSettings): Promise<boolean> {
+    if (chat.isProtected || batchSettings.protectedChatIds.includes(chat.id)) return true;
+
+    const [stored, latestSettings] = await Promise.all([
+      StorageManager.getChatById(chat.id),
+      StorageManager.getSettings(),
+    ]);
+    const latest = stored ?? chat;
+    return (
+      RuleUserProtection.evaluate(latest, latestSettings).triggered ||
+      RuleUserProtection.evaluate(latest, batchSettings).triggered
+    );
   }
 }

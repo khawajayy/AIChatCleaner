@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardHeader } from '../Common/Card';
 import { Button } from '../Common/Button';
 import { StorageManager } from '../../storage/storage-manager';
+import { StorageClient } from '../../storage/storage-client';
 import { Download, Trash2, HardDrive, Database } from 'lucide-react';
 
 interface DataManagementProps {
@@ -31,7 +32,7 @@ export const DataManagement: React.FC<DataManagementProps> = ({ onDataReset }) =
   };
 
   const handleConfirmReset = async () => {
-    await StorageManager.resetAllData();
+    await StorageClient.resetAllData();
     setShowResetConfirm(false);
     onDataReset();
   };
