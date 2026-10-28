@@ -55,6 +55,13 @@ This compiles the extension files into the `dist/` directory.
   ```
   Runs the full suite of unit tests covering rule classifications, safe batch executors, storage schema migrations, and DOM adapter fixtures.
 
+- **Run End-to-End Tests (Playwright)**:
+  ```bash
+  npx playwright install chromium   # once
+  npm run test:e2e
+  ```
+  Builds the extension, loads `dist/` into Chromium, and runs scan, dry run, live delete/archive and protection checks against a simulated ChatGPT sidebar. To reuse a Chromium you already have, set `PLAYWRIGHT_CHROMIUM_PATH` to its executable.
+
 - **Run Type Check (TypeScript)**:
   ```bash
   npm run typecheck

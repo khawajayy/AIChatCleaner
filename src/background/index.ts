@@ -128,7 +128,9 @@ async function handleBackgroundMessage(message: ExtensionMessage, sender: chrome
     case 'EXECUTE_BATCH': {
       const settings = await StorageManager.getSettings();
       const allChats = await StorageManager.getChats();
-      const targetChats = allChats.filter((c) => message.chatIds.includes(c.id));
+      // Keep the user's selection order, not storage order
+      const byId = new Map(allChats.map((c) => [c.id, c]));
+      const targetChats = message.chatIds.flatMap((id) => byId.get(id) ?? []);
 
       // Actions run in each chat tab's content script; the dashboard tab is restored afterwards.
       const dispatcher = new TabActionDispatcher(sender.tab);

@@ -8,6 +8,32 @@ function normalizeText(text: string): string {
   return text.trim().toLowerCase().replace(/[^\w\s]/g, '');
 }
 
+/** Crude plural stemmer so "taxes" protects "Tax" and "contract" protects "Contracts". */
+function stem(word: string): string {
+  if (word.length > 4 && word.endsWith('ies')) return word.slice(0, -3) + 'y';
+  if (/(x|z|ch|sh|ss)es$/.test(word)) return word.slice(0, -2);
+  if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+}
+
+/**
+ * True when the title contains the keyword as text, or any title word shares its stem.
+ * Errs toward matching: a false match only keeps a chat.
+ */
+export function matchesProtectedKeyword(title: string, keyword: string): boolean {
+  const kw = keyword.trim().toLowerCase();
+  if (!kw) return false;
+  const lowerTitle = title.toLowerCase();
+  if (lowerTitle.includes(kw)) return true;
+
+  const kwWords = kw.split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(stem);
+  const titleWords = lowerTitle.split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(stem);
+  if (kwWords.length === 0) return false;
+  if (kwWords.length === 1) return titleWords.includes(kwWords[0]);
+  // Multi-word keyword: consecutive stemmed words
+  return titleWords.some((_, i) => kwWords.every((w, j) => titleWords[i + j] === w));
+}
+
 /**
  * 1. User Protection Rule - Absolute override to Keep
  */
@@ -27,11 +53,9 @@ export const RuleUserProtection: ClassifierRule = {
       };
     }
 
-    const lowerTitle = chat.title.toLowerCase();
-
     // Check keywords
     for (const kw of settings.protectedKeywords) {
-      if (kw && lowerTitle.includes(kw.toLowerCase())) {
+      if (kw && matchesProtectedKeyword(chat.title, kw)) {
         return {
           ruleId: 'rule-user-protection',
           triggered: true,
@@ -151,9 +175,12 @@ export const RuleAccidentalOrTestPrompt: ClassifierRule = {
       /^pong\??$/i,
       /^can you hear me\??$/i,
       /^are you there\??$/i,
-      /^asdf+/i,
-      /^qwer+/i,
-      /^[a-z0-9]{1,3}$/i,
+      /^asdf\w*$/i,
+      /^qwer\w*$/i,
+      // Lone numbers or one repeated character ("1", "42", "aaa", "...").
+      // Short words are left alone: "SQL", "API", "Git", "Tax" are real topics.
+      /^\d{1,3}$/,
+      /^(.)\1+$/,
       /^prompt test$/i,
       /^check$/i,
     ];

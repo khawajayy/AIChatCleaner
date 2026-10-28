@@ -5,6 +5,7 @@ import {
   RuleOneOffFactual,
   RuleMinimumAgeDamping,
   RuleEmptyOrDraft,
+  matchesProtectedKeyword,
 } from '../../src/classifier/rules';
 import { DEFAULT_SETTINGS } from '../../src/storage/schema';
 import { ChatMetadata } from '../../src/types';
@@ -41,6 +42,31 @@ describe('Classifier Individual Rules', () => {
     expect(RuleAccidentalOrTestPrompt.evaluate({ ...dummyChat, title: 'asdf' }, DEFAULT_SETTINGS).triggered).toBe(true);
     expect(RuleAccidentalOrTestPrompt.evaluate({ ...dummyChat, title: 'ping?' }, DEFAULT_SETTINGS).triggered).toBe(true);
     expect(RuleAccidentalOrTestPrompt.evaluate({ ...dummyChat, title: 'Architecture of Distributed DBs' }, DEFAULT_SETTINGS).triggered).toBe(false);
+  });
+
+  it('RuleAccidentalOrTestPrompt leaves short real topics alone', () => {
+    for (const title of ['SQL', 'API', 'Git', 'Tax', 'UX', 'R', 'qwerty keyboard history']) {
+      expect(RuleAccidentalOrTestPrompt.evaluate({ ...dummyChat, title }, DEFAULT_SETTINGS).triggered, title).toBe(false);
+    }
+    for (const title of ['42', 'aaa', '...', 'asdfgh', 'test 2']) {
+      expect(RuleAccidentalOrTestPrompt.evaluate({ ...dummyChat, title }, DEFAULT_SETTINGS).triggered, title).toBe(true);
+    }
+  });
+
+  it('protected keywords match plural and singular forms', () => {
+    const isProtected = (title: string) => RuleUserProtection.evaluate({ ...dummyChat, title }, DEFAULT_SETTINGS).triggered;
+    expect(isProtected('Tax documents 2025')).toBe(true); // default keyword "taxes"
+    expect(isProtected('Tax')).toBe(true);
+    expect(isProtected('Contracts for Q3')).toBe(true); // "contract"
+    expect(isProtected('Client onboarding notes')).toBe(true);
+    expect(isProtected('Refactor auth middleware')).toBe(false);
+  });
+
+  it('matchesProtectedKeyword handles multi-word keywords and stems', () => {
+    expect(matchesProtectedKeyword('Notes on medical records', 'medical record')).toBe(true);
+    expect(matchesProtectedKeyword('Record of medical visits', 'medical record')).toBe(false);
+    expect(matchesProtectedKeyword('Passwords to rotate', 'password')).toBe(true);
+    expect(matchesProtectedKeyword('Anything', '  ')).toBe(false);
   });
 
   it('RuleOneOffFactual triggers for factual queries with few messages', () => {
