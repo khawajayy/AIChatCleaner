@@ -48,8 +48,8 @@ export class ChatGPTAdapter extends BaseAdapter {
 
   public detectPage(): boolean {
     if (typeof window === 'undefined') return false;
-    const hostname = window.location.hostname;
-    return hostname === 'chatgpt.com' || hostname === 'chat.openai.com';
+    // chat.openai.com redirects here and is not in the manifest's host permissions
+    return window.location.hostname === 'chatgpt.com';
   }
 
   protected buildChatUrl(id: string): string {

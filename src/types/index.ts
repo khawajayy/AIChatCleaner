@@ -35,6 +35,8 @@ export interface ChatMetadata {
   isProtected: boolean;
   snippet?: string;
   userOverrideCategory?: ClassificationCategory | null;
+  /** Set when a scan of this chat's platform no longer listed it; cleared when it shows up again */
+  missingSince?: number | null;
 }
 
 export interface ActionResult {

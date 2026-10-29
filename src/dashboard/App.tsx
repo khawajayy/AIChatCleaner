@@ -105,7 +105,8 @@ export const App: React.FC = () => {
   const loadData = async () => {
     const state = await StorageManager.getState();
     setSettings(state.settings);
-    setChats(Object.values(state.chats));
+    // Chats the last scan of their platform no longer listed stay stored but are not shown
+    setChats(Object.values(state.chats).filter((c) => !c.missingSince));
     setLogs(state.operationLogs);
     setPlatformStatus(state.platformStatus);
     return state;

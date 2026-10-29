@@ -55,7 +55,7 @@ export class StorageManager {
         return fresh;
       }
     } catch (err) {
-      console.warn('Storage read failed, using memory state:', err);
+      console.error('Storage read failed, using memory state:', err);
     }
 
     return structuredClone(memoryFallback);
@@ -169,27 +169,52 @@ export class StorageManager {
    */
   public static saveChats(chats: ChatMetadata[]): Promise<void> {
     return this.mutate((state) => {
-      for (const chat of chats) {
-        const existing = state.chats[chat.id];
-        if (!existing) {
-          state.chats[chat.id] = chat;
-          continue;
-        }
-        const merged: ChatMetadata = {
-          ...chat,
-          status: existing.status,
-          isProtected: existing.isProtected || chat.isProtected,
-          userOverrideCategory: existing.userOverrideCategory,
-          firstSeenAt: existing.firstSeenAt ?? null,
-        };
-        if (merged.userOverrideCategory) {
-          merged.category = merged.userOverrideCategory;
-        } else if (merged.isProtected) {
-          merged.category = 'keep';
-        }
-        state.chats[chat.id] = merged;
+      this.mergeScannedChats(state, chats);
+    });
+  }
+
+  /**
+   * Stores the result of a full sidebar scan of `platform` and flags stored chats
+   * of that platform the scan did not list with `missingSince`. Nothing is removed:
+   * sidebars lazy-load, so a chat may only be off-screen, and it is unflagged the
+   * next time a scan lists it. An empty scan flags nothing, as an empty sidebar
+   * usually means it had not loaded.
+   */
+  public static saveScanResults(platform: PlatformId, chats: ChatMetadata[]): Promise<void> {
+    return this.mutate((state) => {
+      this.mergeScannedChats(state, chats);
+      if (chats.length === 0) return;
+      const seen = new Set(chats.map((c) => c.id));
+      const now = Date.now();
+      for (const chat of Object.values(state.chats)) {
+        if (chat.platform !== platform || seen.has(chat.id) || chat.missingSince) continue;
+        state.chats[chat.id] = { ...chat, missingSince: now };
       }
     });
+  }
+
+  private static mergeScannedChats(state: StorageSchema, chats: ChatMetadata[]): void {
+    for (const chat of chats) {
+      const existing = state.chats[chat.id];
+      if (!existing) {
+        state.chats[chat.id] = chat;
+        continue;
+      }
+      const merged: ChatMetadata = {
+        ...chat,
+        status: existing.status,
+        isProtected: existing.isProtected || chat.isProtected,
+        userOverrideCategory: existing.userOverrideCategory,
+        firstSeenAt: existing.firstSeenAt ?? null,
+        missingSince: null,
+      };
+      if (merged.userOverrideCategory) {
+        merged.category = merged.userOverrideCategory;
+      } else if (merged.isProtected) {
+        merged.category = 'keep';
+      }
+      state.chats[chat.id] = merged;
+    }
   }
 
   public static updateChat(
