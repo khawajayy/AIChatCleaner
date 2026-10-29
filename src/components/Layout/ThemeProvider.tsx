@@ -98,7 +98,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setPreference = useCallback((pref: ThemePreference) => {
     setPreferenceState(pref);
-    StorageClient.updateSettings({ theme: pref }).catch((err) => console.warn('Theme could not be saved:', err));
+    StorageClient.updateSettings({ theme: pref }).catch((err) => console.error('Theme could not be saved:', err));
   }, []);
 
   const toggleTheme = useCallback(() => {

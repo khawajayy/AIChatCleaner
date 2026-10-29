@@ -15,6 +15,7 @@ A privacy-first, safety-focused Chrome Extension (Manifest V3) that helps users 
   - **Batch Ceilings & Rate Limiting**: Enforces configurable maximum batch sizes (default 10) and execution delays between actions to prevent spamming or platform rate limits.
   - **Immunity & Protection Filters**: Sensitive conversations matching custom keywords (`taxes`, `legal`, `confidential`, etc.) or regex patterns (`^\[work\].*`) are strictly protected from cleanup.
   - **User Overrides**: Explicit manual user decisions override heuristic suggestions.
+  - **Minimum Age Window**: Chats newer than the window (default 3 days) are never suggested for cleanup, unless empty. The sites don't show creation dates, so a chat's age is counted from when ChatSweep first saw it appear at the top of the sidebar. Chats already there on the first scan, or only reached by scrolling further down, have no known age and aren't covered.
 - **Privacy Guaranteed**:
   - Zero external network dependencies.
   - Runs completely on-device using heuristic classifiers.
@@ -73,6 +74,8 @@ This compiles the extension files into the `dist/` directory.
   npm run build
   ```
   Bundles the popup, dashboard, background service worker, and content scripts.
+
+- **Continuous Integration**: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull request and on pushes to `main` and `ui-revamp-live-delete`. It runs the type check, unit tests, headless e2e tests and `npm run package`, and uploads the store zip as a build artifact (plus the Playwright report when a step fails).
 
 ---
 

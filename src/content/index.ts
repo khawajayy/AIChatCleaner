@@ -8,7 +8,7 @@ const LOADED_FLAG = '__chatsweepContentLoaded';
 
 if (!(window as any)[LOADED_FLAG]) {
   (window as any)[LOADED_FLAG] = true;
-  console.log('[ChatSweep] Content script loaded on:', window.location.hostname);
+  if (import.meta.env.DEV) console.log('[ChatSweep] Content script loaded on:', window.location.hostname);
 
   if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     chrome.runtime.onMessage.addListener((message: ContentScriptMessage, _sender, sendResponse) => {

@@ -277,31 +277,39 @@ export const RuleDuplicateOrRepetitive: ClassifierRule = {
 };
 
 /**
- * 7. Minimum Age Safety Damping Rule
+ * 7. Minimum Age Safety Rule
+ *
+ * The sites don't expose creation dates, so age comes from when ChatSweep first
+ * saw the chat appear in the sidebar (see stampFirstSeen). The engine never lets
+ * a chat this rule keeps become a cleanup suggestion.
  */
 export const RuleMinimumAgeDamping: ClassifierRule = {
   id: 'rule-minimum-age-damping',
   name: 'Recent Conversation Protection Rule',
-  description: 'Dampens cleanup suggestions for freshly created chats to protect ongoing work.',
+  description: 'Keeps chats that appeared within the safety window out of cleanup suggestions.',
   evaluate(chat: ChatMetadata, settings: UserSettings): RuleEvaluation {
-    if (!chat.lastActivityTimestamp) {
+    const since = chat.lastActivityTimestamp ?? chat.firstSeenAt ?? null;
+    if (!since || chat.isEmpty) {
       return { ruleId: 'rule-minimum-age-damping', triggered: false, score: 0, weight: 0 };
     }
 
-    const ageInDays = (Date.now() - chat.lastActivityTimestamp) / (1000 * 60 * 60 * 24);
-
-    if (ageInDays < settings.minimumAgeDays && !chat.isEmpty) {
-      return {
-        ruleId: 'rule-minimum-age-damping',
-        triggered: true,
-        score: -25,
-        categoryHint: 'keep',
-        weight: 55,
-        reason: `Keep: Created recently (${ageInDays < 1 ? 'today' : Math.floor(ageInDays) + 'd ago'}), within the ${settings.minimumAgeDays}-day safety window.`,
-      };
+    const ageInDays = (Date.now() - since) / (1000 * 60 * 60 * 24);
+    if (ageInDays >= settings.minimumAgeDays) {
+      return { ruleId: 'rule-minimum-age-damping', triggered: false, score: 0, weight: 0 };
     }
 
-    return { ruleId: 'rule-minimum-age-damping', triggered: false, score: 0, weight: 0 };
+    const when = ageInDays < 1 ? 'today' : `${Math.floor(ageInDays)}d ago`;
+    const safetyWindow = `within the ${settings.minimumAgeDays}-day safety window`;
+    return {
+      ruleId: 'rule-minimum-age-damping',
+      triggered: true,
+      score: -25,
+      categoryHint: 'keep',
+      weight: 55,
+      reason: chat.lastActivityTimestamp
+        ? `Keep: Active recently (${when}), ${safetyWindow}.`
+        : `Keep: First appeared in your sidebar ${when}, ${safetyWindow}. (Based on when ChatSweep first saw it; the site shows no dates.)`,
+    };
   },
 };
 

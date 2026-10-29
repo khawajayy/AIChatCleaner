@@ -83,6 +83,21 @@ describe('Classifier Individual Rules', () => {
     expect(res.categoryHint).toBe('keep');
   });
 
+  it('RuleMinimumAgeDamping keeps a chat first seen in the sidebar within the window', () => {
+    const recent = { ...dummyChat, lastActivityTimestamp: null, firstSeenAt: Date.now() - 1000 * 60 * 60 * 5 };
+    const res = RuleMinimumAgeDamping.evaluate(recent, DEFAULT_SETTINGS);
+    expect(res.triggered).toBe(true);
+    expect(res.categoryHint).toBe('keep');
+    expect(res.reason).toContain('first saw it');
+  });
+
+  it('RuleMinimumAgeDamping ignores chats with unknown or old first sighting', () => {
+    const unknown = { ...dummyChat, lastActivityTimestamp: null, firstSeenAt: null };
+    const old = { ...dummyChat, lastActivityTimestamp: null, firstSeenAt: Date.now() - 1000 * 60 * 60 * 24 * 10 };
+    expect(RuleMinimumAgeDamping.evaluate(unknown, DEFAULT_SETTINGS).triggered).toBe(false);
+    expect(RuleMinimumAgeDamping.evaluate(old, DEFAULT_SETTINGS).triggered).toBe(false);
+  });
+
   it('RuleEmptyOrDraft triggers for isEmpty chats', () => {
     const emptyChat = { ...dummyChat, isEmpty: true };
     const res = RuleEmptyOrDraft.evaluate(emptyChat, DEFAULT_SETTINGS);

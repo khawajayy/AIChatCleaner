@@ -186,4 +186,57 @@ describe('StorageManager & Schema Migration', () => {
     expect(state.chats['c']).toMatchObject({ category: 'review', userOverrideCategory: 'review' });
     expect(state.chats['d']).toMatchObject({ status: 'discovered', category: 'cleanup' });
   });
+
+  it('rescans keep the first time a chat was seen', async () => {
+    await StorageManager.saveChats([makeChat('a', { firstSeenAt: 1000 }), makeChat('b', { firstSeenAt: null })]);
+    await StorageManager.saveChats([makeChat('a', { firstSeenAt: 9999 }), makeChat('b', { firstSeenAt: 9999 })]);
+
+    const state = await StorageManager.getState();
+    expect(state.chats['a'].firstSeenAt).toBe(1000);
+    expect(state.chats['b'].firstSeenAt).toBeNull();
+  });
+
+  describe('saveScanResults', () => {
+    it('flags chats of the scanned platform that the scan no longer lists', async () => {
+      await StorageManager.saveChats([
+        makeChat('a'),
+        makeChat('b'),
+        makeChat('g', { platform: 'gemini', url: 'https://gemini.google.com/app/g' }),
+      ]);
+
+      await StorageManager.saveScanResults('chatgpt', [makeChat('a')]);
+
+      const state = await StorageManager.getState();
+      expect(state.chats.a.missingSince).toBeFalsy();
+      expect(state.chats.b.missingSince).toEqual(expect.any(Number));
+      // Non-destructive: the chat and its status are kept
+      expect(state.chats.b.status).toBe('discovered');
+      // Other platforms are untouched
+      expect(state.chats.g.missingSince).toBeFalsy();
+    });
+
+    it('does not flag anything when the scan found no chats', async () => {
+      await StorageManager.saveChats([makeChat('a'), makeChat('b')]);
+
+      await StorageManager.saveScanResults('chatgpt', []);
+
+      const state = await StorageManager.getState();
+      expect(state.chats.a.missingSince).toBeFalsy();
+      expect(state.chats.b.missingSince).toBeFalsy();
+    });
+
+    it('unflags a chat that shows up again and keeps the first missing time', async () => {
+      await StorageManager.saveChats([makeChat('a'), makeChat('b', { status: 'reviewed' })]);
+      await StorageManager.saveScanResults('chatgpt', [makeChat('a')]);
+      const firstMissing = (await StorageManager.getChatById('b'))!.missingSince;
+
+      await StorageManager.saveScanResults('chatgpt', [makeChat('a')]);
+      expect((await StorageManager.getChatById('b'))!.missingSince).toBe(firstMissing);
+
+      await StorageManager.saveScanResults('chatgpt', [makeChat('a'), makeChat('b')]);
+      const b = (await StorageManager.getChatById('b'))!;
+      expect(b.missingSince).toBeFalsy();
+      expect(b.status).toBe('reviewed');
+    });
+  });
 });
