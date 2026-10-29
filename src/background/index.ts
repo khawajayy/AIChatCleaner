@@ -3,14 +3,15 @@ import { ClassificationEngine } from '../classifier/engine';
 import { SafeBatchExecutor } from './batch-executor';
 import { TabActionDispatcher, findPlatformTab, ensureContentScript, sendToTab } from './tab-dispatcher';
 import { platformFromUrl } from '../adapters/platform-urls';
+import { sanitizeSettingsUpdate } from '../storage/settings-validation';
 import { ExtensionMessage } from '../types/messages';
 import { PlatformId } from '../types';
 
-console.log('[ChatSweep] Background service worker initialized.');
+if (import.meta.env.DEV) console.log('[ChatSweep] Background service worker initialized.');
 
 if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
   chrome.runtime.onInstalled.addListener(async () => {
-    console.log('[ChatSweep] Extension installed or updated.');
+    if (import.meta.env.DEV) console.log('[ChatSweep] Extension installed or updated.');
     const state = await StorageManager.getState();
     if (!state.settings.onboardingCompleted) {
       // First install: open dashboard tab
@@ -24,6 +25,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
 // Global message handler
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
+    // Only this extension's own pages may drive the worker
+    if (sender.id !== chrome.runtime.id) return false;
     // Content scripts only answer tabs.sendMessage; ignore anything they send here
     if (sender.tab && platformFromUrl(sender.tab.url)) return false;
     handleBackgroundMessage(message, sender)
@@ -44,10 +47,15 @@ async function handleBackgroundMessage(message: ExtensionMessage, sender: chrome
     }
 
     case 'UPDATE_SETTINGS': {
-      const { payload, reclassify } = message;
+      const payload = sanitizeSettingsUpdate(message.payload);
+      const reclassify = message.reclassify === true;
       // Reclassify the stored chats in the same write, so chats changed since the UI last read are not overwritten
       return await StorageManager.mutate((state) => {
-        state.settings = { ...state.settings, ...payload };
+        state.settings = {
+          ...state.settings,
+          ...payload,
+          enabledPlatforms: { ...state.settings.enabledPlatforms, ...payload.enabledPlatforms },
+        };
         if (reclassify) {
           for (const chat of ClassificationEngine.classifyBatch(Object.values(state.chats), state.settings)) {
             state.chats[chat.id] = chat;
@@ -76,14 +84,7 @@ async function handleBackgroundMessage(message: ExtensionMessage, sender: chrome
         return { connected: false, platform: null };
       }
 
-      let detectedPlatform: PlatformId | null = null;
-      if (tab.url.includes('chatgpt.com') || tab.url.includes('chat.openai.com')) {
-        detectedPlatform = 'chatgpt';
-      } else if (tab.url.includes('gemini.google.com')) {
-        detectedPlatform = 'gemini';
-      } else if (tab.url.includes('claude.ai')) {
-        detectedPlatform = 'claude';
-      }
+      const detectedPlatform = platformFromUrl(tab.url);
 
       return {
         connected: !!detectedPlatform,
@@ -202,9 +203,11 @@ async function triggerPlatformScan(targetPlatform?: PlatformId): Promise<any> {
     const rawChats = response.chats || [];
     const settings = await StorageManager.getSettings();
 
-    // Run discovered chats through classification engine
-    const classifiedChats = ClassificationEngine.classifyBatch(rawChats, settings);
-    await StorageManager.saveChats(classifiedChats);
+    // Run discovered chats through classification engine; only this platform's chats count as seen
+    const classifiedChats = ClassificationEngine.classifyBatch(rawChats, settings).filter(
+      (c) => c.platform === detectedPlatform
+    );
+    await StorageManager.saveScanResults(detectedPlatform, classifiedChats);
 
     await StorageManager.updatePlatformStatus(detectedPlatform, {
       lastScanTimestamp: Date.now(),

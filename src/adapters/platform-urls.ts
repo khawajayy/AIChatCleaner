@@ -21,7 +21,7 @@ export function platformFromUrl(url?: string): PlatformId | null {
   } catch {
     return null;
   }
-  if (host === 'chatgpt.com' || host === 'chat.openai.com') return 'chatgpt';
+  if (host === 'chatgpt.com') return 'chatgpt';
   if (host === 'gemini.google.com') return 'gemini';
   if (host === 'claude.ai') return 'claude';
   return null;

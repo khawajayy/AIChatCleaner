@@ -13,7 +13,7 @@ import { RefreshCw, ArrowUpRight, CheckCircle2, AlertCircle, Globe } from 'lucid
 type StatusMessage = { tone: 'success' | 'error'; text: string };
 
 function countChats(chats: ChatMetadata[]) {
-  const live = chats.filter((c) => c.status !== 'deleted');
+  const live = chats.filter((c) => c.status !== 'deleted' && !c.missingSince);
   return {
     total: live.length,
     cleanup: live.filter((c) => c.category === 'cleanup').length,
