@@ -74,6 +74,8 @@ This compiles the extension files into the `dist/` directory.
   ```
   Bundles the popup, dashboard, background service worker, and content scripts.
 
+- **Continuous Integration**: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every pull request and on pushes to `main` and `ui-revamp-live-delete`. It runs the type check, unit tests, headless e2e tests and `npm run package`, and uploads the store zip as a build artifact (plus the Playwright report when a step fails).
+
 ---
 
 ## Publishing to the Chrome Web Store
