@@ -164,7 +164,8 @@ export class StorageManager {
 
   /**
    * Stores freshly scanned chats. Anything the user or a batch decided about a
-   * chat already in storage (status, protection, category override) is kept.
+   * chat already in storage (status, protection, category override) is kept,
+   * and so is when it was first seen.
    */
   public static saveChats(chats: ChatMetadata[]): Promise<void> {
     return this.mutate((state) => {
@@ -179,6 +180,7 @@ export class StorageManager {
           status: existing.status,
           isProtected: existing.isProtected || chat.isProtected,
           userOverrideCategory: existing.userOverrideCategory,
+          firstSeenAt: existing.firstSeenAt ?? null,
         };
         if (merged.userOverrideCategory) {
           merged.category = merged.userOverrideCategory;

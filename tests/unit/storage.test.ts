@@ -186,4 +186,13 @@ describe('StorageManager & Schema Migration', () => {
     expect(state.chats['c']).toMatchObject({ category: 'review', userOverrideCategory: 'review' });
     expect(state.chats['d']).toMatchObject({ status: 'discovered', category: 'cleanup' });
   });
+
+  it('rescans keep the first time a chat was seen', async () => {
+    await StorageManager.saveChats([makeChat('a', { firstSeenAt: 1000 }), makeChat('b', { firstSeenAt: null })]);
+    await StorageManager.saveChats([makeChat('a', { firstSeenAt: 9999 }), makeChat('b', { firstSeenAt: 9999 })]);
+
+    const state = await StorageManager.getState();
+    expect(state.chats['a'].firstSeenAt).toBe(1000);
+    expect(state.chats['b'].firstSeenAt).toBeNull();
+  });
 });

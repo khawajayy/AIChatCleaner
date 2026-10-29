@@ -17,6 +17,11 @@ export interface ChatMetadata {
   title: string;
   url: string;
   lastActivityTimestamp: number | null;
+  /**
+   * When ChatSweep first saw this chat appear in the sidebar. null when it was
+   * already there the first time the sidebar was scanned, so its age is unknown.
+   */
+  firstSeenAt?: number | null;
   messageCount: number | null;
   isEmpty: boolean;
   isUnfinished: boolean;

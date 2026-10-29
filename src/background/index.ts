@@ -1,4 +1,5 @@
 import { StorageManager } from '../storage/storage-manager';
+import { stampFirstSeen } from '../storage/first-seen';
 import { ClassificationEngine } from '../classifier/engine';
 import { SafeBatchExecutor } from './batch-executor';
 import { TabActionDispatcher, findPlatformTab, ensureContentScript, sendToTab } from './tab-dispatcher';
@@ -199,8 +200,9 @@ async function triggerPlatformScan(targetPlatform?: PlatformId): Promise<any> {
       };
     }
 
-    const rawChats = response.chats || [];
-    const settings = await StorageManager.getSettings();
+    const { settings, chats: knownChats } = await StorageManager.getState();
+    // Needs sidebar order, so stamp before anything reorders the list
+    const rawChats = stampFirstSeen(response.chats || [], knownChats);
 
     // Run discovered chats through classification engine
     const classifiedChats = ClassificationEngine.classifyBatch(rawChats, settings);
