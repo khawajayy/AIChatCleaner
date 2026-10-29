@@ -8,7 +8,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
     outDir: 'dist',
-    emptyOutDir: false,
+    // Runs first in `npm run build`, so clear stale hashed assets from earlier builds.
+    // vite.content.config.ts runs second and must not empty the folder.
+    emptyOutDir: true,
     rollupOptions: {
       input: {
         dashboard: resolve(import.meta.dirname, 'dashboard.html'),
