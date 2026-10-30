@@ -95,3 +95,21 @@ Everything for a submission is in [`store/LISTING.md`](store/LISTING.md): listin
    ```
    Images go to `store/assets/`. They use made-up sample data and need Chrome installed (set `CHROME_PATH` if it isn't found).
 4. The privacy policy is `docs/privacy-policy.html`. Turn on GitHub Pages (Settings → Pages → deploy from `main` / `docs`) to publish it at https://khawajayy.github.io/AIChatCleaner/privacy-policy.html.
+
+---
+
+## Landing page
+
+The landing page lives in `docs/` and is served by GitHub Pages, together with the privacy policy.
+
+- `docs/index.html` and `docs/assets/site.css` are hand-written.
+- `docs/assets/site.js` is built from `site/demo.ts`. The live demo runs the extension's real classifier, so rebuild after classifier changes.
+- `docs/download/chatsweep.zip` is the manual-install download.
+
+Rebuild the page script and the download after every release:
+
+```bash
+npm run site
+```
+
+Once the Chrome Web Store listing is approved, put its URL in the `chatsweep:store-url` meta tag in `docs/index.html`. The "Add to Chrome" buttons then appear and the "coming soon" notes are hidden.

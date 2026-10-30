@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChatSweep: clear out throwaway AI chats</title>
+  <meta name="description" content="ChatSweep is a Chrome extension that finds the test prompts, one-off questions and abandoned chats in your ChatGPT, Gemini and Claude history, and clears them out safely. Nothing leaves your browser.">
+  <meta property="og:title" content="ChatSweep: clear out throwaway AI chats">
+  <meta property="og:description" content="Find and delete throwaway chats in ChatGPT, Gemini and Claude. Explainable rules, dry runs first, nothing leaves your browser.">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#0c0e12">
+  <!-- Chrome Web Store listing URL. Leave empty until the listing is approved; the page then shows "coming soon". -->
+  <meta name="chatsweep:store-url" content="">
+  <link rel="icon" href="assets/icon128.png">
+  <link rel="stylesheet" href="assets/site.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top" aria-label="ChatSweep home">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m16 22-1-4"/><path d="M19 14a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2h-3a1 1 0 0 1-1-1V4a2 2 0 0 0-4 0v5a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2v1a1 1 0 0 0 1 1"/><path d="M19 14H5l-1.973 6.767A1 1 0 0 0 4 22h16a1 1 0 0 0 .973-1.233z"/><path d="m8 22 1-4"/></svg>
+        </span>
+        ChatSweep
+      </a>
+      <nav class="nav-links" aria-label="Sections">
+        <a href="#demo">Live demo</a>
+        <a href="#how">How it works</a>
+        <a href="#privacy">Privacy</a>
+        <a class="btn btn-sm btn-primary" href="#install">Install</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Chrome extension for ChatGPT, Gemini &amp; Claude</p>
+          <h1>Your AI chat history is full of <span class="accent">throwaway chats.</span></h1>
+          <p class="lede">ChatSweep finds the test prompts, one-word questions and abandoned drafts piling up in your sidebar, explains why each one was flagged, and clears them out safely, all inside your browser.</p>
+          <div class="cta-row">
+            <a class="btn btn-primary store-only" data-store-link href="#install">Add to Chrome</a>
+            <a class="btn btn-primary no-store-only" href="#install">Download for Chrome</a>
+            <a class="btn btn-ghost" href="#demo">Try the live demo</a>
+          </div>
+          <p class="store-note no-store-only"><span class="dot" aria-hidden="true"></span> Coming soon to the Chrome Web Store. You can install it manually today.</p>
+          <ul class="trust" aria-label="Highlights">
+            <li>Nothing leaves your browser</li>
+            <li>Dry run on by default</li>
+            <li>No account needed</li>
+          </ul>
+        </div>
+        <div class="hero-media">
+          <div class="video-frame">
+            <video id="hero-video" src="media/chatsweep-demo.mp4" poster="media/chatsweep-demo-poster.jpg" autoplay muted loop playsinline controls preload="metadata" aria-label="23-second product video: scanning a chat sidebar, protecting chats, a dry run, then sweeping"></video>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="demo" aria-labelledby="demo-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Live demo</p>
+          <h2 id="demo-title">See how ChatSweep sorts a sidebar</h2>
+          <p class="section-lede">This runs the extension's real classifier in your browser. Add your own chat titles, change the protected keywords, and watch the results update. Nothing you type is sent anywhere.</p>
+        </div>
+
+        <div class="demo">
+          <div class="panel demo-side">
+            <div class="panel-head">
+              <h3>Your sidebar</h3>
+              <span class="muted" id="demo-sidebar-count"></span>
+            </div>
+            <form class="add-form" id="demo-add-form">
+              <label class="sr-only" for="demo-add-title">Chat title</label>
+              <input id="demo-add-title" type="text" placeholder="Add a chat title, e.g. &quot;hello?&quot;" maxlength="120" autocomplete="off">
+              <label class="sr-only" for="demo-add-platform">Platform</label>
+              <select id="demo-add-platform">
+                <option value="chatgpt">ChatGPT</option>
+                <option value="gemini">Gemini</option>
+                <option value="claude">Claude</option>
+              </select>
+              <button class="btn btn-sm btn-secondary" type="submit">Add</button>
+            </form>
+            <ul class="side-list" id="demo-sidebar" aria-live="polite"></ul>
+
+            <div class="kw">
+              <h4>Protected keywords</h4>
+              <p class="muted small">Chats matching these are never flagged or deleted.</p>
+              <div class="chips" id="demo-keywords"></div>
+              <form class="add-form" id="demo-kw-form">
+                <label class="sr-only" for="demo-kw-input">New protected keyword</label>
+                <input id="demo-kw-input" type="text" placeholder="Add a keyword, e.g. invoice" maxlength="40" autocomplete="off">
+                <button class="btn btn-sm btn-secondary" type="submit">Protect</button>
+              </form>
+            </div>
+            <button class="link-btn" id="demo-reset" type="button">Reset demo</button>
+          </div>
+
+          <div class="panel demo-results">
+            <div class="tabs" role="tablist" aria-label="Classification">
+              <button class="tab" role="tab" data-tab="cleanup" type="button">Cleanup <span class="tab-count"></span></button>
+              <button class="tab" role="tab" data-tab="review" type="button">Needs review <span class="tab-count"></span></button>
+              <button class="tab" role="tab" data-tab="keep" type="button">Keep <span class="tab-count"></span></button>
+            </div>
+            <ul class="results" id="demo-results" role="tabpanel" aria-live="polite"></ul>
+            <div class="sweep-bar">
+              <label class="switch">
+                <input type="checkbox" id="demo-dryrun" checked>
+                <span class="switch-track" aria-hidden="true"></span>
+                <span>Dry run only</span>
+              </label>
+              <div class="sweep-actions">
+                <button class="link-btn" id="demo-restore" type="button" hidden>Restore swept chats</button>
+                <button class="btn btn-primary" id="demo-sweep" type="button">Sweep</button>
+              </div>
+            </div>
+            <p class="toast" id="demo-toast" role="status" hidden></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">How it works</p>
+          <h2 id="how-title">Four steps, and you approve every one</h2>
+        </div>
+        <ol class="steps">
+          <li class="step">
+            <span class="step-num">1</span>
+            <h3>Scan</h3>
+            <p>Open ChatGPT, Gemini or Claude and click Scan. ChatSweep reads the conversation titles in the sidebar. Scanning never changes anything.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">2</span>
+            <h3>Review</h3>
+            <p>Every chat is sorted into Keep, Needs review or Cleanup, with a plain-English reason. Override any suggestion with one click.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">3</span>
+            <h3>Dry run</h3>
+            <p>Select what you want gone and run a dry run. ChatSweep checks each chat can be found and acted on, without touching it.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">4</span>
+            <h3>Sweep</h3>
+            <p>Turn dry run off, confirm, and ChatSweep deletes each chat through the site's own menu, then checks it's really gone.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section" id="safety" aria-labelledby="safety-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Built to be safe</p>
+          <h2 id="safety-title">Deleting chats should never be a surprise</h2>
+        </div>
+        <div class="features">
+          <div class="feature">
+            <h3>Dry run by default</h3>
+            <p>Nothing is deleted until you switch dry run off yourself and tick a confirmation box.</p>
+          </div>
+          <div class="feature">
+            <h3>Protection rules</h3>
+            <p>Protect chats by keyword (taxes, legal, client…), by pattern like <code>[Work]</code>, or one at a time. Protection is checked again right before every action.</p>
+          </div>
+          <div class="feature">
+            <h3>Recent chats are safe</h3>
+            <p>Chats ChatSweep has only just seen are kept for a safety window you set, so ongoing work isn't swept by accident.</p>
+          </div>
+          <div class="feature">
+            <h3>Small, paced batches</h3>
+            <p>Batches are capped at 10 chats by default, paced out, and stop at the first problem.</p>
+          </div>
+          <div class="feature">
+            <h3>Explainable rules</h3>
+            <p>No black box: every suggestion comes with the rule that triggered it and how confident it is.</p>
+          </div>
+          <div class="feature">
+            <h3>Activity log</h3>
+            <p>Every dry run and action is logged, so you can always see exactly what happened.</p>
+          </div>
+        </div>
+
+        <div class="platforms" aria-label="Supported platforms">
+          <div class="platform"><span class="pmark pmark-chatgpt" aria-hidden="true">C</span><div><strong>ChatGPT</strong><span>Delete and archive</span></div></div>
+          <div class="platform"><span class="pmark pmark-gemini" aria-hidden="true">G</span><div><strong>Google Gemini</strong><span>Delete</span></div></div>
+          <div class="platform"><span class="pmark pmark-claude" aria-hidden="true">C</span><div><strong>Anthropic Claude</strong><span>Delete</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="privacy" aria-labelledby="privacy-title">
+      <div class="wrap privacy">
+        <div>
+          <p class="eyebrow">Private by design</p>
+          <h2 id="privacy-title">Your chats stay yours</h2>
+          <p class="section-lede">ChatSweep has no servers and no analytics. It reads conversation titles only, never the messages inside them, and keeps everything in your browser's local extension storage.</p>
+          <a class="btn btn-ghost" href="privacy-policy.html">Read the privacy policy</a>
+        </div>
+        <ul class="checklist">
+          <li><strong>No account.</strong> Install it and go.</li>
+          <li><strong>No network requests.</strong> ChatSweep never sends your data anywhere.</li>
+          <li><strong>Titles only.</strong> Message content is never read.</li>
+          <li><strong>Three sites only.</strong> It can't see any other website.</li>
+          <li><strong>Easy to erase.</strong> Reset data in Settings, or uninstall to remove everything.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="install" aria-labelledby="install-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Install</p>
+          <h2 id="install-title">Get ChatSweep <span class="version" data-version></span></h2>
+          <p class="section-lede">Works in Google Chrome and other Chromium browsers such as Edge and Brave.</p>
+        </div>
+        <div class="install">
+          <div class="panel install-card">
+            <h3>Chrome Web Store</h3>
+            <p class="store-only">The easiest way: one click to install, with automatic updates.</p>
+            <p class="no-store-only">ChatSweep is in review for the Chrome Web Store. Once it's approved, you'll be able to install it here in one click, with automatic updates.</p>
+            <a class="btn btn-primary store-only" data-store-link href="#">Add to Chrome</a>
+            <span class="btn btn-disabled no-store-only" aria-disabled="true">Coming soon</span>
+          </div>
+
+          <div class="panel install-card">
+            <h3>Install manually</h3>
+            <p>Available now. Takes about a minute. Manual installs don't update automatically, so come back here for new versions.</p>
+            <ol class="manual-steps">
+              <li>
+                <a class="btn btn-primary" href="download/chatsweep.zip" download>Download chatsweep.zip</a>
+                <span class="muted small">then unzip it to a folder you'll keep, e.g. Documents\ChatSweep</span>
+              </li>
+              <li>
+                Open the extensions page:
+                <span class="copy-row"><code>chrome://extensions</code><button class="btn btn-sm btn-secondary" type="button" data-copy="chrome://extensions">Copy</button></span>
+                <span class="muted small">Paste it into the address bar. Browsers don't allow links to this page.</span>
+              </li>
+              <li>Turn on <strong>Developer mode</strong> (top right).</li>
+              <li>Click <strong>Load unpacked</strong> and choose the unzipped folder.</li>
+              <li>Pin ChatSweep from the puzzle-piece menu, open ChatGPT, Gemini or Claude, and click <strong>Scan</strong>.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="faq" aria-labelledby="faq-title">
+      <div class="wrap faq-wrap">
+        <h2 id="faq-title">Questions</h2>
+        <details>
+          <summary>Can ChatSweep delete something I wanted to keep?</summary>
+          <p>Only if you select it, switch dry run off and confirm. Protected chats are skipped even then, and protection is checked again right before each action, so protecting a chat mid-batch still saves it. Deleted chats are removed by the site itself and can't be recovered, so review the list before you sweep.</p>
+        </details>
+        <details>
+          <summary>Does it read my conversations?</summary>
+          <p>No. It reads the titles shown in the sidebar, and the site's own menus and dialogs when it carries out an action you asked for. It never opens or reads the messages inside a chat.</p>
+        </details>
+        <details>
+          <summary>Why doesn't it find all of my chats?</summary>
+          <p>Sites load older chats as you scroll the sidebar. ChatSweep sees what's loaded, so scroll further down the sidebar and scan again to include older conversations.</p>
+        </details>
+        <details>
+          <summary>Why can't I archive Gemini or Claude chats?</summary>
+          <p>Those sites don't have an archive feature, only delete. ChatSweep only offers what each site supports.</p>
+        </details>
+        <details>
+          <summary>Chrome warns about developer mode extensions. Is that OK?</summary>
+          <p>That warning appears for any extension installed manually rather than from the Chrome Web Store. Once ChatSweep is in the store you can install it from there instead, and the warning goes away.</p>
+        </details>
+        <details>
+          <summary>Is ChatSweep affiliated with OpenAI, Google or Anthropic?</summary>
+          <p>No. ChatSweep is an independent tool.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span class="brand brand-sm">
+        <span class="logo logo-sm" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m16 22-1-4"/><path d="M19 14a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2h-3a1 1 0 0 1-1-1V4a2 2 0 0 0-4 0v5a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2v1a1 1 0 0 0 1 1"/><path d="M19 14H5l-1.973 6.767A1 1 0 0 0 4 22h16a1 1 0 0 0 .973-1.233z"/><path d="m8 22 1-4"/></svg>
+        </span>
+        ChatSweep <span class="muted" data-version></span>
+      </span>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="privacy-policy.html">Privacy policy</a>
+        <a href="#install">Install</a>
+      </nav>
+      <p class="muted small">Not affiliated with OpenAI, Google or Anthropic.</p>
+    </div>
+  </footer>
+</body>
+</html>
