@@ -10,7 +10,12 @@ import {
 export type ExtensionMessage =
   | { type: 'GET_STORAGE_DATA' }
   | { type: 'GET_SETTINGS' }
-  | { type: 'UPDATE_SETTINGS'; payload: Partial<UserSettings> }
+  | {
+      type: 'UPDATE_SETTINGS';
+      payload: Partial<UserSettings>;
+      /** Re-run classification on the stored chats with the new settings */
+      reclassify?: boolean;
+    }
   | { type: 'RESET_STORAGE' }
   | { type: 'EXPORT_DATA' }
   | { type: 'DETECT_ACTIVE_TAB' }
@@ -34,6 +39,11 @@ export type ExtensionMessage =
   | {
       type: 'TOGGLE_CHAT_PROTECTION';
       chatId: string;
+    }
+  | {
+      type: 'SET_CHAT_PROTECTION';
+      chatId: string;
+      isProtected: boolean;
     }
   | {
       type: 'EXECUTE_BATCH';

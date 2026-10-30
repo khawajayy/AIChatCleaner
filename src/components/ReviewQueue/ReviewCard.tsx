@@ -3,6 +3,7 @@ import { Card } from '../Common/Card';
 import { Badge } from '../Common/Badge';
 import { Button } from '../Common/Button';
 import { PlatformMark, PLATFORM_META } from '../Common/PlatformMark';
+import { displayReason } from '../Common/reasons';
 import { ChatMetadata } from '../../types';
 import { ExternalLink, Check, Trash2, Lock, Unlock } from 'lucide-react';
 
@@ -54,7 +55,7 @@ export const ReviewCard: React.FC<ReviewCardProps> = ({
           {chat.reasons.map((reason, idx) => (
             <li key={idx} className="flex gap-2">
               <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-fg-subtle" aria-hidden="true" />
-              <span>{reason}</span>
+              <span>{displayReason(reason)}</span>
             </li>
           ))}
         </ul>

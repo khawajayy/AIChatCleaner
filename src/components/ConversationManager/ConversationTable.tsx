@@ -2,6 +2,7 @@ import React from 'react';
 import { ChatMetadata, ClassificationCategory } from '../../types';
 import { Badge } from '../Common/Badge';
 import { PlatformMark, PLATFORM_META } from '../Common/PlatformMark';
+import { displayReason } from '../Common/reasons';
 import { ExternalLink, Trash2, Lock, Unlock, Inbox } from 'lucide-react';
 
 interface ConversationTableProps {
@@ -131,8 +132,8 @@ export const ConversationTable: React.FC<ConversationTableProps> = ({
                     </td>
 
                     <td className="py-3.5 px-3 align-top max-w-0 text-sm text-fg-muted">
-                      <p className="line-clamp-2" title={chat.reasons.join('\n')}>
-                        {chat.reasons[0] || 'No low-value signals found.'}
+                      <p className="line-clamp-2" title={chat.reasons.map(displayReason).join('\n')}>
+                        {chat.reasons[0] ? displayReason(chat.reasons[0]) : 'No low-value signals found.'}
                       </p>
                     </td>
 

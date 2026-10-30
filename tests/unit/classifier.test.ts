@@ -36,6 +36,21 @@ describe('ClassificationEngine', () => {
     expect(result.reasons[0]).toContain('Cleanup candidate');
   });
 
+  it('never suggests cleanup for a chat first seen inside the minimum-age window', () => {
+    const chat: ChatMetadata = {
+      ...baseChat,
+      title: 'asdf',
+      lastActivityTimestamp: null,
+      firstSeenAt: Date.now() - 1000 * 60 * 60,
+    };
+    // Same junk title without a known age is a cleanup candidate
+    expect(ClassificationEngine.classifyChat({ ...chat, firstSeenAt: null }, DEFAULT_SETTINGS).category).toBe('cleanup');
+
+    const result = ClassificationEngine.classifyChat(chat, DEFAULT_SETTINGS);
+    expect(result.category).toBe('keep');
+    expect(result.matchedRules).toContain('rule-minimum-age-damping');
+  });
+
   it('strictly protects conversations matching protected keyword', () => {
     const chat: ChatMetadata = {
       ...baseChat,

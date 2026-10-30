@@ -8,6 +8,32 @@ function normalizeText(text: string): string {
   return text.trim().toLowerCase().replace(/[^\w\s]/g, '');
 }
 
+/** Crude plural stemmer so "taxes" protects "Tax" and "contract" protects "Contracts". */
+function stem(word: string): string {
+  if (word.length > 4 && word.endsWith('ies')) return word.slice(0, -3) + 'y';
+  if (/(x|z|ch|sh|ss)es$/.test(word)) return word.slice(0, -2);
+  if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+}
+
+/**
+ * True when the title contains the keyword as text, or any title word shares its stem.
+ * Errs toward matching: a false match only keeps a chat.
+ */
+export function matchesProtectedKeyword(title: string, keyword: string): boolean {
+  const kw = keyword.trim().toLowerCase();
+  if (!kw) return false;
+  const lowerTitle = title.toLowerCase();
+  if (lowerTitle.includes(kw)) return true;
+
+  const kwWords = kw.split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(stem);
+  const titleWords = lowerTitle.split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(stem);
+  if (kwWords.length === 0) return false;
+  if (kwWords.length === 1) return titleWords.includes(kwWords[0]);
+  // Multi-word keyword: consecutive stemmed words
+  return titleWords.some((_, i) => kwWords.every((w, j) => titleWords[i + j] === w));
+}
+
 /**
  * 1. User Protection Rule - Absolute override to Keep
  */
@@ -27,11 +53,9 @@ export const RuleUserProtection: ClassifierRule = {
       };
     }
 
-    const lowerTitle = chat.title.toLowerCase();
-
     // Check keywords
     for (const kw of settings.protectedKeywords) {
-      if (kw && lowerTitle.includes(kw.toLowerCase())) {
+      if (kw && matchesProtectedKeyword(chat.title, kw)) {
         return {
           ruleId: 'rule-user-protection',
           triggered: true,
@@ -151,9 +175,12 @@ export const RuleAccidentalOrTestPrompt: ClassifierRule = {
       /^pong\??$/i,
       /^can you hear me\??$/i,
       /^are you there\??$/i,
-      /^asdf+/i,
-      /^qwer+/i,
-      /^[a-z0-9]{1,3}$/i,
+      /^asdf\w*$/i,
+      /^qwer\w*$/i,
+      // Lone numbers or one repeated character ("1", "42", "aaa", "...").
+      // Short words are left alone: "SQL", "API", "Git", "Tax" are real topics.
+      /^\d{1,3}$/,
+      /^(.)\1+$/,
       /^prompt test$/i,
       /^check$/i,
     ];
@@ -250,31 +277,39 @@ export const RuleDuplicateOrRepetitive: ClassifierRule = {
 };
 
 /**
- * 7. Minimum Age Safety Damping Rule
+ * 7. Minimum Age Safety Rule
+ *
+ * The sites don't expose creation dates, so age comes from when ChatSweep first
+ * saw the chat appear in the sidebar (see stampFirstSeen). The engine never lets
+ * a chat this rule keeps become a cleanup suggestion.
  */
 export const RuleMinimumAgeDamping: ClassifierRule = {
   id: 'rule-minimum-age-damping',
   name: 'Recent Conversation Protection Rule',
-  description: 'Dampens cleanup suggestions for freshly created chats to protect ongoing work.',
+  description: 'Keeps chats that appeared within the safety window out of cleanup suggestions.',
   evaluate(chat: ChatMetadata, settings: UserSettings): RuleEvaluation {
-    if (!chat.lastActivityTimestamp) {
+    const since = chat.lastActivityTimestamp ?? chat.firstSeenAt ?? null;
+    if (!since || chat.isEmpty) {
       return { ruleId: 'rule-minimum-age-damping', triggered: false, score: 0, weight: 0 };
     }
 
-    const ageInDays = (Date.now() - chat.lastActivityTimestamp) / (1000 * 60 * 60 * 24);
-
-    if (ageInDays < settings.minimumAgeDays && !chat.isEmpty) {
-      return {
-        ruleId: 'rule-minimum-age-damping',
-        triggered: true,
-        score: -25,
-        categoryHint: 'keep',
-        weight: 55,
-        reason: `Keep: Created recently (${ageInDays < 1 ? 'today' : Math.floor(ageInDays) + 'd ago'}), within the ${settings.minimumAgeDays}-day safety window.`,
-      };
+    const ageInDays = (Date.now() - since) / (1000 * 60 * 60 * 24);
+    if (ageInDays >= settings.minimumAgeDays) {
+      return { ruleId: 'rule-minimum-age-damping', triggered: false, score: 0, weight: 0 };
     }
 
-    return { ruleId: 'rule-minimum-age-damping', triggered: false, score: 0, weight: 0 };
+    const when = ageInDays < 1 ? 'today' : `${Math.floor(ageInDays)}d ago`;
+    const safetyWindow = `within the ${settings.minimumAgeDays}-day safety window`;
+    return {
+      ruleId: 'rule-minimum-age-damping',
+      triggered: true,
+      score: -25,
+      categoryHint: 'keep',
+      weight: 55,
+      reason: chat.lastActivityTimestamp
+        ? `Keep: Active recently (${when}), ${safetyWindow}.`
+        : `Keep: First appeared in your sidebar ${when}, ${safetyWindow}. (Based on when ChatSweep first saw it; the site shows no dates.)`,
+    };
   },
 };
 

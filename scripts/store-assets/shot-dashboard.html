@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- Renders the real built dashboard with sample data. Query: ?theme=light|dark&tab=<page>&step=select|dialog -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>html, body { margin: 0; overflow: hidden; } iframe { border: 0; width: 1280px; height: 800px; display: block; }</style>
+  <script src="/store/demo-data.js"></script>
+  <script>
+    var params = new URLSearchParams(location.search);
+    seedChatSweepDemo(params.get('theme') || 'light');
+  </script>
+</head>
+<body>
+  <iframe id="app"></iframe>
+  <script>
+    var frame = document.getElementById('app');
+    var step = params.get('step');
+    frame.src = '/dashboard.html#' + (params.get('tab') || 'dashboard');
+    frame.onload = function () {
+      if (!step) return;
+      whenReady(frame, 'tbody tr a', function (doc) {
+        selectRows(doc, ['test', 'New chat', 'asdf', 'testing 123', 'hi']);
+        if (step === 'dialog') {
+          setTimeout(function () { clickByText(doc, 'button', 'Delete…'); }, 200);
+        }
+      });
+    };
+  </script>
+</body>
+</html>

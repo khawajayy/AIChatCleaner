@@ -30,7 +30,7 @@ export const StatCard: React.FC<StatCardProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className="group w-full rounded-xl border border-border bg-surface p-5 text-left shadow-card transition-colors hover:border-border-strong"
+      className="group flex w-full flex-col justify-start rounded-xl border border-border bg-surface p-5 text-left shadow-card transition-colors hover:border-border-strong"
     >
       <div className="flex items-start justify-between gap-3">
         <p className="text-[15px] font-medium text-fg-muted">{title}</p>

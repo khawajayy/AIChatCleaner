@@ -17,6 +17,9 @@ export const STORAGE_KEY = 'chatsweep_state_v1';
 let memoryFallback: StorageSchema = structuredClone(INITIAL_STORAGE_STATE);
 
 export class StorageManager {
+  // Tail of the write queue. Writes in one context run one at a time so a
+  // read-modify-write never interleaves with another and drops its update.
+  private static writeQueue: Promise<unknown> = Promise.resolve();
   private static isChromeStorageAvailable(): boolean {
     return (
       typeof chrome !== 'undefined' &&
@@ -52,7 +55,7 @@ export class StorageManager {
         return fresh;
       }
     } catch (err) {
-      console.warn('Storage read failed, using memory state:', err);
+      console.error('Storage read failed, using memory state:', err);
     }
 
     return structuredClone(memoryFallback);
@@ -72,6 +75,28 @@ export class StorageManager {
       console.error('Storage save failed:', err);
     }
     memoryFallback = state;
+  }
+
+  /**
+   * Runs `fn` on the latest stored state and saves the result, after every
+   * earlier write in this context has finished. All writes go through here;
+   * the UI routes its writes to the background worker so they share one queue.
+   */
+  public static mutate<T>(
+    fn: (state: StorageSchema) => T | Promise<T>
+  ): Promise<T> {
+    return this.enqueue(async () => {
+      const state = await this.getState();
+      const result = await fn(state);
+      await this.saveState(state);
+      return result;
+    });
+  }
+
+  private static enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.writeQueue.then(task);
+    this.writeQueue = run.catch(() => {});
+    return run;
   }
 
   /**
@@ -118,13 +143,13 @@ export class StorageManager {
     return state.settings;
   }
 
-  public static async updateSettings(
+  public static updateSettings(
     partial: Partial<UserSettings>
   ): Promise<UserSettings> {
-    const state = await this.getState();
-    state.settings = { ...state.settings, ...partial };
-    await this.saveState(state);
-    return state.settings;
+    return this.mutate((state) => {
+      state.settings = { ...state.settings, ...partial };
+      return state.settings;
+    });
   }
 
   public static async getChats(): Promise<ChatMetadata[]> {
@@ -137,40 +162,100 @@ export class StorageManager {
     return state.chats[id] || null;
   }
 
-  public static async saveChats(chats: ChatMetadata[]): Promise<void> {
-    const state = await this.getState();
-    for (const chat of chats) {
-      // Preserve existing user override if previously set
-      const existing = state.chats[chat.id];
-      if (existing && existing.userOverrideCategory) {
-        chat.userOverrideCategory = existing.userOverrideCategory;
-        chat.category = existing.userOverrideCategory;
-      }
-      if (existing && existing.isProtected) {
-        chat.isProtected = true;
-      }
-      state.chats[chat.id] = chat;
-    }
-    await this.saveState(state);
+  /**
+   * Stores freshly scanned chats. Anything the user or a batch decided about a
+   * chat already in storage (status, protection, category override) is kept,
+   * and so is when it was first seen.
+   */
+  public static saveChats(chats: ChatMetadata[]): Promise<void> {
+    return this.mutate((state) => {
+      this.mergeScannedChats(state, chats);
+    });
   }
 
-  public static async updateChat(
+  /**
+   * Stores the result of a full sidebar scan of `platform` and flags stored chats
+   * of that platform the scan did not list with `missingSince`. Nothing is removed:
+   * sidebars lazy-load, so a chat may only be off-screen, and it is unflagged the
+   * next time a scan lists it. An empty scan flags nothing, as an empty sidebar
+   * usually means it had not loaded.
+   */
+  public static saveScanResults(platform: PlatformId, chats: ChatMetadata[]): Promise<void> {
+    return this.mutate((state) => {
+      this.mergeScannedChats(state, chats);
+      if (chats.length === 0) return;
+      const seen = new Set(chats.map((c) => c.id));
+      const now = Date.now();
+      for (const chat of Object.values(state.chats)) {
+        if (chat.platform !== platform || seen.has(chat.id) || chat.missingSince) continue;
+        state.chats[chat.id] = { ...chat, missingSince: now };
+      }
+    });
+  }
+
+  private static mergeScannedChats(state: StorageSchema, chats: ChatMetadata[]): void {
+    for (const chat of chats) {
+      const existing = state.chats[chat.id];
+      if (!existing) {
+        state.chats[chat.id] = chat;
+        continue;
+      }
+      const merged: ChatMetadata = {
+        ...chat,
+        status: existing.status,
+        isProtected: existing.isProtected || chat.isProtected,
+        userOverrideCategory: existing.userOverrideCategory,
+        firstSeenAt: existing.firstSeenAt ?? null,
+        missingSince: null,
+      };
+      if (merged.userOverrideCategory) {
+        merged.category = merged.userOverrideCategory;
+      } else if (merged.isProtected) {
+        merged.category = 'keep';
+      }
+      state.chats[chat.id] = merged;
+    }
+  }
+
+  public static updateChat(
     id: string,
     updates: Partial<ChatMetadata>
   ): Promise<ChatMetadata | null> {
-    const state = await this.getState();
-    if (!state.chats[id]) return null;
-
-    state.chats[id] = { ...state.chats[id], ...updates };
-    await this.saveState(state);
-    return state.chats[id];
+    return this.mutate((state) => {
+      if (!state.chats[id]) return null;
+      state.chats[id] = { ...state.chats[id], ...updates };
+      return state.chats[id];
+    });
   }
 
-  public static async appendOperationLog(log: OperationLog): Promise<void> {
-    const state = await this.getState();
-    // Keep last 250 operations to prevent unbounded growth
-    state.operationLogs = [log, ...state.operationLogs].slice(0, 250);
-    await this.saveState(state);
+  /**
+   * Protects or unprotects a chat, keeping the chat flag and
+   * settings.protectedChatIds in step within a single write.
+   */
+  public static setChatProtection(
+    id: string,
+    isProtected: boolean
+  ): Promise<ChatMetadata | null> {
+    return this.mutate((state) => {
+      const chat = state.chats[id];
+      if (!chat) return null;
+      state.chats[id] = {
+        ...chat,
+        isProtected,
+        category: isProtected ? 'keep' : chat.category,
+      };
+      const ids = state.settings.protectedChatIds.filter((x) => x !== id);
+      if (isProtected) ids.push(id);
+      state.settings = { ...state.settings, protectedChatIds: ids };
+      return state.chats[id];
+    });
+  }
+
+  public static appendOperationLog(log: OperationLog): Promise<void> {
+    return this.mutate((state) => {
+      // Keep last 250 operations to prevent unbounded growth
+      state.operationLogs = [log, ...state.operationLogs].slice(0, 250);
+    });
   }
 
   public static async getOperationLogs(): Promise<OperationLog[]> {
@@ -178,7 +263,7 @@ export class StorageManager {
     return state.operationLogs;
   }
 
-  public static async updatePlatformStatus(
+  public static updatePlatformStatus(
     platform: PlatformId,
     status: {
       lastScanTimestamp?: number | null;
@@ -187,21 +272,23 @@ export class StorageManager {
       lastError?: string;
     }
   ): Promise<void> {
-    const state = await this.getState();
-    state.platformStatus[platform] = {
-      ...state.platformStatus[platform],
-      ...status,
-    };
-    await this.saveState(state);
+    return this.mutate((state) => {
+      state.platformStatus[platform] = {
+        ...state.platformStatus[platform],
+        ...status,
+      };
+    });
   }
 
-  public static async resetAllData(): Promise<void> {
-    const fresh = structuredClone(INITIAL_STORAGE_STATE);
-    fresh.chats = {};
-    fresh.operationLogs = [];
-    fresh.settings = structuredClone(DEFAULT_SETTINGS);
-    memoryFallback = structuredClone(fresh);
-    await this.saveState(fresh);
+  public static resetAllData(): Promise<void> {
+    return this.enqueue(async () => {
+      const fresh = structuredClone(INITIAL_STORAGE_STATE);
+      fresh.chats = {};
+      fresh.operationLogs = [];
+      fresh.settings = structuredClone(DEFAULT_SETTINGS);
+      memoryFallback = structuredClone(fresh);
+      await this.saveState(fresh);
+    });
   }
 
   public static async exportDataJson(): Promise<string> {

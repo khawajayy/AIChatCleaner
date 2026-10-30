@@ -100,6 +100,12 @@ export class ClassificationEngine {
       confidence = aggregateScore <= -20 ? 0.9 : 0.6;
     }
 
+    // The minimum-age window is a promise, not a nudge: recent chats are never cleanup
+    if (category === 'cleanup' && matchedRules.includes('rule-minimum-age-damping')) {
+      category = 'keep';
+      confidence = 0.6;
+    }
+
     // Check user confidence threshold
     if (category === 'cleanup' && confidence < settings.confidenceThreshold) {
       // Downgrade to review if confidence does not meet user threshold

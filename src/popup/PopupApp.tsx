@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StorageManager } from '../storage/storage-manager';
+import { StorageClient, onStorageChanged } from '../storage/storage-client';
 import { UserSettings, PlatformId, ChatMetadata } from '../types';
 import { DEFAULT_SETTINGS } from '../storage/schema';
 import { Button } from '../components/Common/Button';
@@ -12,7 +13,7 @@ import { RefreshCw, ArrowUpRight, CheckCircle2, AlertCircle, Globe } from 'lucid
 type StatusMessage = { tone: 'success' | 'error'; text: string };
 
 function countChats(chats: ChatMetadata[]) {
-  const live = chats.filter((c) => c.status !== 'deleted');
+  const live = chats.filter((c) => c.status !== 'deleted' && !c.missingSince);
   return {
     total: live.length,
     cleanup: live.filter((c) => c.category === 'cleanup').length,
@@ -40,11 +41,14 @@ export const PopupApp: React.FC = () => {
         setActivePlatform(detectPlatformFromUrl(tab?.url));
       });
     }
+    return onStorageChanged(() => {
+      refreshCounts();
+    });
   }, []);
 
   const handleToggleDryRun = async (next: boolean) => {
     setSettings((prev) => ({ ...prev, dryRunDefault: next }));
-    await StorageManager.updateSettings({ dryRunDefault: next });
+    await StorageClient.updateSettings({ dryRunDefault: next });
   };
 
   const handleScanCurrent = async () => {

@@ -1,16 +1,18 @@
 import { StorageManager } from '../storage/storage-manager';
+import { stampFirstSeen } from '../storage/first-seen';
 import { ClassificationEngine } from '../classifier/engine';
 import { SafeBatchExecutor } from './batch-executor';
 import { TabActionDispatcher, findPlatformTab, ensureContentScript, sendToTab } from './tab-dispatcher';
 import { platformFromUrl } from '../adapters/platform-urls';
+import { sanitizeSettingsUpdate } from '../storage/settings-validation';
 import { ExtensionMessage } from '../types/messages';
 import { PlatformId } from '../types';
 
-console.log('[ChatSweep] Background service worker initialized.');
+if (import.meta.env.DEV) console.log('[ChatSweep] Background service worker initialized.');
 
 if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
   chrome.runtime.onInstalled.addListener(async () => {
-    console.log('[ChatSweep] Extension installed or updated.');
+    if (import.meta.env.DEV) console.log('[ChatSweep] Extension installed or updated.');
     const state = await StorageManager.getState();
     if (!state.settings.onboardingCompleted) {
       // First install: open dashboard tab
@@ -24,6 +26,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
 // Global message handler
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
+    // Only this extension's own pages may drive the worker
+    if (sender.id !== chrome.runtime.id) return false;
     // Content scripts only answer tabs.sendMessage; ignore anything they send here
     if (sender.tab && platformFromUrl(sender.tab.url)) return false;
     handleBackgroundMessage(message, sender)
@@ -44,7 +48,22 @@ async function handleBackgroundMessage(message: ExtensionMessage, sender: chrome
     }
 
     case 'UPDATE_SETTINGS': {
-      return await StorageManager.updateSettings(message.payload);
+      const payload = sanitizeSettingsUpdate(message.payload);
+      const reclassify = message.reclassify === true;
+      // Reclassify the stored chats in the same write, so chats changed since the UI last read are not overwritten
+      return await StorageManager.mutate((state) => {
+        state.settings = {
+          ...state.settings,
+          ...payload,
+          enabledPlatforms: { ...state.settings.enabledPlatforms, ...payload.enabledPlatforms },
+        };
+        if (reclassify) {
+          for (const chat of ClassificationEngine.classifyBatch(Object.values(state.chats), state.settings)) {
+            state.chats[chat.id] = chat;
+          }
+        }
+        return state.settings;
+      });
     }
 
     case 'RESET_STORAGE': {
@@ -66,14 +85,7 @@ async function handleBackgroundMessage(message: ExtensionMessage, sender: chrome
         return { connected: false, platform: null };
       }
 
-      let detectedPlatform: PlatformId | null = null;
-      if (tab.url.includes('chatgpt.com') || tab.url.includes('chat.openai.com')) {
-        detectedPlatform = 'chatgpt';
-      } else if (tab.url.includes('gemini.google.com')) {
-        detectedPlatform = 'gemini';
-      } else if (tab.url.includes('claude.ai')) {
-        detectedPlatform = 'claude';
-      }
+      const detectedPlatform = platformFromUrl(tab.url);
 
       return {
         connected: !!detectedPlatform,
@@ -105,30 +117,22 @@ async function handleBackgroundMessage(message: ExtensionMessage, sender: chrome
     case 'TOGGLE_CHAT_PROTECTION': {
       const chat = await StorageManager.getChatById(message.chatId);
       if (!chat) return { success: false, error: 'Chat not found' };
+      const updated = await StorageManager.setChatProtection(message.chatId, !chat.isProtected);
+      return { success: !!updated, chat: updated };
+    }
 
-      const newProtectedState = !chat.isProtected;
-      const updated = await StorageManager.updateChat(message.chatId, {
-        isProtected: newProtectedState,
-        category: newProtectedState ? 'keep' : chat.category,
-      });
-
-      // Update protectedChatIds list in settings as well
-      const settings = await StorageManager.getSettings();
-      let protectedIds = [...settings.protectedChatIds];
-      if (newProtectedState) {
-        if (!protectedIds.includes(message.chatId)) protectedIds.push(message.chatId);
-      } else {
-        protectedIds = protectedIds.filter((id) => id !== message.chatId);
-      }
-      await StorageManager.updateSettings({ protectedChatIds: protectedIds });
-
+    case 'SET_CHAT_PROTECTION': {
+      const updated = await StorageManager.setChatProtection(message.chatId, message.isProtected);
+      if (!updated) return { success: false, error: 'Chat not found' };
       return { success: true, chat: updated };
     }
 
     case 'EXECUTE_BATCH': {
       const settings = await StorageManager.getSettings();
       const allChats = await StorageManager.getChats();
-      const targetChats = allChats.filter((c) => message.chatIds.includes(c.id));
+      // Keep the user's selection order, not storage order
+      const byId = new Map(allChats.map((c) => [c.id, c]));
+      const targetChats = message.chatIds.flatMap((id) => byId.get(id) ?? []);
 
       // Actions run in each chat tab's content script; the dashboard tab is restored afterwards.
       const dispatcher = new TabActionDispatcher(sender.tab);
@@ -197,12 +201,15 @@ async function triggerPlatformScan(targetPlatform?: PlatformId): Promise<any> {
       };
     }
 
-    const rawChats = response.chats || [];
-    const settings = await StorageManager.getSettings();
+    const { settings, chats: knownChats } = await StorageManager.getState();
+    // Needs sidebar order, so stamp before anything reorders the list
+    const rawChats = stampFirstSeen(response.chats || [], knownChats);
 
-    // Run discovered chats through classification engine
-    const classifiedChats = ClassificationEngine.classifyBatch(rawChats, settings);
-    await StorageManager.saveChats(classifiedChats);
+    // Run discovered chats through classification engine; only this platform's chats count as seen
+    const classifiedChats = ClassificationEngine.classifyBatch(rawChats, settings).filter(
+      (c) => c.platform === detectedPlatform
+    );
+    await StorageManager.saveScanResults(detectedPlatform, classifiedChats);
 
     await StorageManager.updatePlatformStatus(detectedPlatform, {
       lastScanTimestamp: Date.now(),

@@ -92,7 +92,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ settings, onUp
         <div className="space-y-6">
           <RangeSetting
             title="Minimum age"
-            description="Conversations newer than this are never suggested for cleanup, unless empty."
+            description="Conversations that appeared in the sidebar more recently than this are never suggested for cleanup, unless empty. Age counts from when ChatSweep first saw the chat, since the sites show no dates; chats already there on your first scan have no known age."
             value={settings.minimumAgeDays}
             display={`${settings.minimumAgeDays} day${settings.minimumAgeDays === 1 ? '' : 's'}`}
             min={0}

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ChatSweep Privacy Policy</title>
+  <style>
+    :root { --bg: #ffffff; --fg: #0e1217; --muted: #474f5c; --border: #e2e5ea; --accent: #15803d; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0c0e12; --fg: #eef1f5; --muted: #b0b8c4; --border: #262b33; --accent: #4ade80; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+    main { max-width: 720px; margin: 0 auto; padding: 48px 20px 80px; }
+    h1 { font-size: 2rem; margin: 0 0 4px; }
+    h2 { font-size: 1.2rem; margin: 2.2em 0 0.4em; }
+    p, li { color: var(--muted); }
+    strong { color: var(--fg); }
+    a { color: var(--accent); }
+    .updated { margin-top: 0; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    th { color: var(--fg); font-weight: 600; }
+    td { color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ChatSweep Privacy Policy</h1>
+  <p class="updated">Last updated: October 30, 2026</p>
+
+  <p>
+    ChatSweep is a browser extension that helps you find and remove low-value conversations on
+    ChatGPT (chatgpt.com), Google Gemini (gemini.google.com) and Anthropic Claude (claude.ai).
+    This policy explains what the extension reads, what it stores and what it does not do.
+  </p>
+
+  <h2>Summary</h2>
+  <p>
+    <strong>Everything stays in your browser.</strong> ChatSweep has no servers, makes no network
+    requests of its own, and contains no analytics, advertising or tracking code. Nobody, including
+    the developer, can see your data.
+  </p>
+
+  <h2>What ChatSweep reads</h2>
+  <p>Only when you start a scan or an action, and only on the three sites above, ChatSweep reads:</p>
+  <ul>
+    <li>The <strong>titles and links</strong> of conversations shown in the site's sidebar.</li>
+    <li>The sidebar's menus and confirmation dialogs, so it can carry out a delete or archive you asked for.</li>
+  </ul>
+  <p>
+    ChatSweep does <strong>not</strong> read the messages inside your conversations, your account
+    details, passwords, or any other website.
+  </p>
+
+  <h2>What ChatSweep stores</h2>
+  <table>
+    <tr><th>Data</th><th>Where</th><th>Why</th></tr>
+    <tr>
+      <td>Conversation titles, links and IDs; their cleanup classification; when ChatSweep first saw each one and whether it is still in the sidebar</td>
+      <td>Your browser's extension storage (<code>chrome.storage.local</code>)</td>
+      <td>To show and filter your conversations in the dashboard</td>
+    </tr>
+    <tr>
+      <td>Your settings and protection rules (keywords, patterns, protected chats)</td>
+      <td>Extension storage</td>
+      <td>To remember your preferences</td>
+    </tr>
+    <tr>
+      <td>A log of dry runs and actions (title, platform, time, result)</td>
+      <td>Extension storage</td>
+      <td>So you can see what was done</td>
+    </tr>
+    <tr>
+      <td>Light or dark theme choice</td>
+      <td>The extension's own local storage</td>
+      <td>To show the right theme without a flash on load</td>
+    </tr>
+  </table>
+  <p>This data never leaves your device unless you export it yourself with "Export JSON" in Settings.</p>
+
+  <h2>Actions on your accounts</h2>
+  <p>
+    ChatSweep only deletes or archives a conversation after you select it and confirm. Dry runs,
+    which are on by default, check that an action would work without changing anything. Deleted
+    conversations are removed by the platform itself and cannot be recovered by ChatSweep.
+  </p>
+
+  <h2>Sharing and selling</h2>
+  <p>
+    ChatSweep does not sell, share, or transfer any data to anyone. It does not use your data for
+    advertising, credit decisions, or any purpose other than the features described above.
+  </p>
+
+  <h2>Deleting your data</h2>
+  <ul>
+    <li>Use <strong>Settings → Privacy &amp; data → Reset data</strong> to clear everything ChatSweep stored.</li>
+    <li>Uninstalling the extension also removes all of its stored data.</li>
+  </ul>
+
+  <h2>Permissions</h2>
+  <ul>
+    <li><strong>storage</strong>: keep your settings and scan results on your device.</li>
+    <li><strong>scripting</strong>: connect to a ChatGPT, Gemini or Claude tab that was already open before the extension was installed.</li>
+    <li><strong>Access to chatgpt.com, gemini.google.com and claude.ai</strong>: read the conversation sidebar and carry out the actions you confirm. ChatSweep has no access to any other site.</li>
+  </ul>
+
+  <h2>Changes to this policy</h2>
+  <p>
+    If this policy changes, the updated version will be published at this address with a new
+    "Last updated" date.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Questions or concerns: open an issue at
+    <a href="https://github.com/khawajayy/AIChatCleaner/issues">github.com/khawajayy/AIChatCleaner/issues</a>.
+  </p>
+</main>
+</body>
+</html>

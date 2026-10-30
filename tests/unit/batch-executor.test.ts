@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SafeBatchExecutor } from '../../src/background/batch-executor';
+import { SafeBatchExecutor, ActionDispatcher } from '../../src/background/batch-executor';
+import { StorageManager } from '../../src/storage/storage-manager';
 import { resetMockStorage } from '../setup';
 import { ChatMetadata, UserSettings } from '../../src/types';
 import { DEFAULT_SETTINGS } from '../../src/storage/schema';
@@ -87,6 +88,44 @@ describe('SafeBatchExecutor', () => {
     expect(res.results[0].success).toBe(false);
     expect(res.results[0].error).toContain('strictly protected');
     expect(res.results[1].success).toBe(true);
+  });
+
+  it('skips a chat the user protects after the batch has started', async () => {
+    const chats = dummyChats.slice(0, 3);
+    await StorageManager.saveChats(chats.map((c) => ({ ...c })));
+    const settings: UserSettings = { ...DEFAULT_SETTINGS, maxBatchSize: 10, actionDelayMs: 0 };
+
+    const acted: string[] = [];
+    const dispatcher: ActionDispatcher = async (chat, action) => {
+      acted.push(chat.id);
+      // While the first action runs, the user hits "protect" on the last chat
+      if (chat.id === 'chat-1') await StorageManager.updateChat('chat-3', { isProtected: true });
+      return { success: true, action, chatId: chat.id, platform: chat.platform, timestamp: Date.now(), verified: true };
+    };
+
+    const res = await SafeBatchExecutor.executeBatch(chats, 'delete', false, settings, undefined, dispatcher);
+
+    expect(acted).toEqual(['chat-1', 'chat-2']);
+    expect(res.results[2]).toMatchObject({ chatId: 'chat-3', success: false });
+    expect(res.results[2].error).toContain('strictly protected');
+  });
+
+  it('skips a chat matching a keyword added after the batch started', async () => {
+    const chats = [{ ...dummyChats[0], title: 'Quarterly invoices' }];
+    await StorageManager.saveChats(chats.map((c) => ({ ...c })));
+    await StorageManager.updateSettings({ protectedKeywords: ['invoice'] });
+
+    const acted: string[] = [];
+    const dispatcher: ActionDispatcher = async (chat, action) => {
+      acted.push(chat.id);
+      return { success: true, action, chatId: chat.id, platform: chat.platform, timestamp: Date.now(), verified: true };
+    };
+
+    // Settings snapshot from before the keyword was added
+    const res = await SafeBatchExecutor.executeBatch(chats, 'delete', false, { ...DEFAULT_SETTINGS, actionDelayMs: 0 }, undefined, dispatcher);
+
+    expect(acted).toEqual([]);
+    expect(res.results[0].success).toBe(false);
   });
 
   it('supports in-flight cancellation', async () => {

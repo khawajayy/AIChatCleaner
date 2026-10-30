@@ -1,18 +1,15 @@
 import React, { useState } from 'react';
 import { Card, CardHeader } from '../Common/Card';
 import { Button } from '../Common/Button';
-import { Switch } from '../Common/Switch';
-import { UserSettings } from '../../types';
 import { StorageManager } from '../../storage/storage-manager';
-import { Download, Trash2, HardDrive, Cpu, Database } from 'lucide-react';
+import { StorageClient } from '../../storage/storage-client';
+import { Download, Trash2, HardDrive, Database } from 'lucide-react';
 
 interface DataManagementProps {
-  settings: UserSettings;
-  onUpdate: (partial: Partial<UserSettings>) => void;
   onDataReset: () => void;
 }
 
-export const DataManagement: React.FC<DataManagementProps> = ({ settings, onUpdate, onDataReset }) => {
+export const DataManagement: React.FC<DataManagementProps> = ({ onDataReset }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -35,7 +32,7 @@ export const DataManagement: React.FC<DataManagementProps> = ({ settings, onUpda
   };
 
   const handleConfirmReset = async () => {
-    await StorageManager.resetAllData();
+    await StorageClient.resetAllData();
     setShowResetConfirm(false);
     onDataReset();
   };
@@ -52,21 +49,6 @@ export const DataManagement: React.FC<DataManagementProps> = ({ settings, onUpda
           <li>Nothing is uploaded. There is no analytics or tracking code.</li>
           <li>The rule-based classifier runs locally and needs no API key.</li>
         </ul>
-      </Card>
-
-      <Card>
-        <CardHeader icon={<Cpu />} title="AI classification" description="Planned for a future release. Off by default." />
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-[15px] font-medium">Opt in to the experimental AI classifier</p>
-            <p className="text-sm text-fg-muted">You'll be asked to choose a provider before anything is sent.</p>
-          </div>
-          <Switch
-            checked={settings.aiClassificationOptIn}
-            onChange={(v) => onUpdate({ aiClassificationOptIn: v })}
-            label="Opt in to AI classifier"
-          />
-        </div>
       </Card>
 
       <Card>

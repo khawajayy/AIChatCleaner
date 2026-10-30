@@ -14,7 +14,7 @@ import { DataManagement } from '../components/Settings/DataManagement';
 import { OnboardingModal } from '../components/Onboarding/OnboardingModal';
 import { PLATFORM_META } from '../components/Common/PlatformMark';
 import { StorageManager } from '../storage/storage-manager';
-import { ClassificationEngine } from '../classifier/engine';
+import { StorageClient, onStorageChanged } from '../storage/storage-client';
 import {
   ChatMetadata,
   UserSettings,
@@ -35,6 +35,11 @@ import {
   X,
 } from 'lucide-react';
 
+function tabFromHash(): DashboardTab {
+  const hash = window.location.hash.slice(1);
+  return NAV_ITEMS.some((n) => n.id === hash) ? (hash as DashboardTab) : 'dashboard';
+}
+
 const SETTINGS_SECTIONS = [
   { id: 'general', label: 'Safety & general' },
   { id: 'exclusions', label: 'Protection rules' },
@@ -46,7 +51,17 @@ export const App: React.FC = () => {
   const [chats, setChats] = useState<ChatMetadata[]>([]);
   const [logs, setLogs] = useState<OperationLog[]>([]);
   const [platformStatus, setPlatformStatus] = useState(INITIAL_STORAGE_STATE.platformStatus);
-  const [activeTab, setActiveTab] = useState<DashboardTab>('dashboard');
+  // The current page lives in the URL hash so pages can be linked to and Back works.
+  const [activeTab, setActiveTabState] = useState<DashboardTab>(tabFromHash);
+  const setActiveTab = (tab: DashboardTab) => {
+    setActiveTabState(tab);
+    if (window.location.hash !== `#${tab}`) window.location.hash = tab;
+  };
+  useEffect(() => {
+    const onHashChange = () => setActiveTabState(tabFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const [isScanning, setIsScanning] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -85,23 +100,29 @@ export const App: React.FC = () => {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<'general' | 'exclusions' | 'data'>('general');
 
-  // Load initial data
+  // Read the stored state. Writes go through the background worker (StorageClient)
+  // and come back here via the storage change listener.
   const loadData = async () => {
     const state = await StorageManager.getState();
     setSettings(state.settings);
-    setChats(Object.values(state.chats));
+    // Chats the last scan of their platform no longer listed stay stored but are not shown
+    setChats(Object.values(state.chats).filter((c) => !c.missingSince));
     setLogs(state.operationLogs);
     setPlatformStatus(state.platformStatus);
-
-    // Check if onboarding is needed
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('onboarding') === 'true' || !state.settings.onboardingCompleted) {
-      setOnboardingOpen(true);
-    }
+    return state;
   };
 
   useEffect(() => {
-    loadData();
+    loadData().then((state) => {
+      // Check if onboarding is needed
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('onboarding') === 'true' || !state.settings.onboardingCompleted) {
+        setOnboardingOpen(true);
+      }
+    });
+    const unsubscribeStorage = onStorageChanged(() => {
+      loadData();
+    });
 
     // Listen for background batch messages
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
@@ -118,18 +139,20 @@ export const App: React.FC = () => {
         }
       };
       chrome.runtime.onMessage.addListener(listener);
-      return () => chrome.runtime.onMessage.removeListener(listener);
+      return () => {
+        chrome.runtime.onMessage.removeListener(listener);
+        unsubscribeStorage();
+      };
     }
+    return unsubscribeStorage;
   }, []);
 
   const handleUpdateSettings = async (partial: Partial<UserSettings>) => {
-    const updated = await StorageManager.updateSettings(partial);
+    setSettings((prev) => ({ ...prev, ...partial }));
+    // The worker re-evaluates the stored chats with the new thresholds/exclusions
+    const updated = await StorageClient.updateSettings(partial, { reclassify: true });
     setSettings(updated);
-
-    // Re-evaluate chats with new thresholds/exclusions
-    const reclassified = ClassificationEngine.classifyBatch(chats, updated);
-    await StorageManager.saveChats(reclassified);
-    setChats(reclassified);
+    await loadData();
   };
 
   const handleCloseOnboarding = async () => {
@@ -185,27 +208,16 @@ export const App: React.FC = () => {
     const chat = chats.find((c) => c.id === chatId);
     if (!chat) return;
 
-    const newProtected = !chat.isProtected;
-    const updated = await StorageManager.updateChat(chatId, {
-      isProtected: newProtected,
-      category: newProtected ? 'keep' : chat.category,
-    });
-
+    // Set the state the user sees flipped, rather than toggling whatever storage holds
+    const updated = await StorageClient.setChatProtection(chatId, !chat.isProtected);
     if (updated) {
       setChats((prev) => prev.map((c) => (c.id === chatId ? updated : c)));
-      // Also update settings.protectedChatIds
-      let ids = [...settings.protectedChatIds];
-      if (newProtected) ids.push(chatId);
-      else ids = ids.filter((id) => id !== chatId);
-      await StorageManager.updateSettings({ protectedChatIds: ids });
+      await loadData();
     }
   };
 
   const handleChangeCategory = async (chatId: string, category: ClassificationCategory) => {
-    const updated = await StorageManager.updateChat(chatId, {
-      category,
-      userOverrideCategory: category,
-    });
+    const updated = await StorageClient.setChatCategory(chatId, category);
     if (updated) {
       setChats((prev) => prev.map((c) => (c.id === chatId ? updated : c)));
     }
@@ -441,7 +453,7 @@ export const App: React.FC = () => {
             <div className="space-y-10">
               <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
                 <StatCard
-                  title="Conversations tracked"
+                  title="Total chats"
                   value={chats.length}
                   subtitle="Across all platforms"
                   icon={<MessageSquare />}
@@ -449,9 +461,9 @@ export const App: React.FC = () => {
                   onClick={() => setActiveTab('manager')}
                 />
                 <StatCard
-                  title="Cleanup candidates"
+                  title="To clean up"
                   value={cleanupCandidatesCount}
-                  subtitle="Empty, test or low-value chats"
+                  subtitle="Empty or throwaway chats"
                   icon={<Trash2 />}
                   accentColor="rose"
                   onClick={() => {
@@ -610,7 +622,7 @@ export const App: React.FC = () => {
                   <ExclusionsManager settings={settings} onUpdate={handleUpdateSettings} />
                 )}
                 {settingsSection === 'data' && (
-                  <DataManagement settings={settings} onUpdate={handleUpdateSettings} onDataReset={loadData} />
+                  <DataManagement onDataReset={loadData} />
                 )}
               </div>
             </div>
