@@ -98,6 +98,12 @@ Everything for a submission is in [`store/LISTING.md`](store/LISTING.md): listin
 
 ---
 
+## Logo
+
+The artwork is in `store/logo/`: `logo.svg` for larger sizes and `logo-small.svg` for 32px and under. After changing either one, run `npm run icons` to regenerate the extension and landing page icons. `BrandLogo.tsx` has its own copy of the small version.
+
+---
+
 ## Landing page
 
 The landing page lives in `docs/` and is served by GitHub Pages, together with the privacy policy.

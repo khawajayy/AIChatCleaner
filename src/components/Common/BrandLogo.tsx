@@ -1,16 +1,23 @@
 import React from 'react';
-import { BrushCleaning } from 'lucide-react';
 
 interface BrandLogoProps {
   size?: 'sm' | 'md';
 }
 
+// Same artwork as store/logo/logo-small.svg
 export const BrandLogo: React.FC<BrandLogoProps> = ({ size = 'md' }) => {
-  const box = size === 'sm' ? 'size-8 rounded-lg' : 'size-10 rounded-xl';
-  const icon = size === 'sm' ? 'size-[18px]' : 'size-[22px]';
+  const box = size === 'sm' ? 'size-8' : 'size-10';
   return (
-    <span className={`inline-flex shrink-0 items-center justify-center bg-accent text-accent-fg ${box}`} aria-hidden="true">
-      <BrushCleaning className={icon} strokeWidth={2.25} />
-    </span>
+    <svg className={`shrink-0 ${box}`} viewBox="0 0 96 96" aria-hidden="true">
+      <rect width="96" height="96" rx="20" fill="#0b1510" />
+      <path
+        d="M24 8h48a16 16 0 0 1 16 16v36a16 16 0 0 1-16 16H38L20 90a2.500 2.500 0 0 1-4-2V75A16 16 0 0 1 8 60V24A16 16 0 0 1 24 8z"
+        fill="#22c55e"
+      />
+      <g transform="translate(49 42) rotate(45) scale(.86)">
+        <rect x="-5.500" y="-42" width="11" height="42" rx="5" fill="#03140a" />
+        <path d="M-13 2h26l7 29c.5 2-.8 3.500-2.500 3.500h-35c-1.700 0-3-1.500-2.500-3.500z" fill="#03140a" />
+      </g>
+    </svg>
   );
 };

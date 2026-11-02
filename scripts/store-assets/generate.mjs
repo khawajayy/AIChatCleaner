@@ -43,7 +43,10 @@ function serve() {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     let file;
-    if (url.pathname === '/popup-demo.html') {
+    if (url.pathname === '/store-logo.svg') {
+      res.writeHead(200, { 'content-type': 'image/svg+xml' });
+      return res.end(fs.readFileSync(path.join(root, 'store', 'logo', 'logo-small.svg')));
+    } else if (url.pathname === '/popup-demo.html') {
       // Real popup with a chrome.* shim injected before anything else runs
       const html = fs
         .readFileSync(path.join(distDir, 'popup.html'), 'utf8')
